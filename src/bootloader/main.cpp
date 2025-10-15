@@ -47,7 +47,7 @@ static bool read_exact(Stream& s, uint8_t* buf, size_t n, uint32_t timeout_ms){
 
 static void wait_serial_ready(Stream& s, uint32_t max_wait_ms=10000){
   uint32_t t0 = millis();
-  while (!Serial && (millis() - t0 < max_wait_ms)) { delay(10); }
+  while (!Serial0 && (millis() - t0 < max_wait_ms)) { delay(10); }
   drain_input(s, 30, 200);
 }
 
@@ -64,7 +64,6 @@ static bool wait_go(Stream& s, uint32_t max_wait_ms=60000){
       line = s.readStringUntil('\n'); line.trim(); line.toUpperCase();
       if (line == "GO") return true;
     }
-    if (millis() - start > max_wait_ms) return false;
     delay(5);
   }
 }
@@ -149,15 +148,19 @@ static void jump_to_app0_and_restart(){
 
 void setup(){
   pinMode(BOOT_PIN, INPUT_PULLUP);
-  Serial.begin(115200);
+  Serial0.begin(115200);
   delay(2000);
 
   if (digitalRead(BOOT_PIN) == LOW) {
     // 更新模式
-    (void)receive_and_flash_app0(Serial);
+        Serial0.println("Update mode, stay in factory");
+
+    (void)receive_and_flash_app0(Serial0);
     // 失败就留在 factory
-    Serial.println("Update failed, stay in factory");
+    Serial0.println("Update failed, stay in factory");
   } else {
+            Serial0.println("Normal mode, boot app0");
+
     // 正常启动 app0
     jump_to_app0_and_restart();
   }
