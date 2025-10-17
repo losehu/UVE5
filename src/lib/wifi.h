@@ -18,7 +18,6 @@ struct NetProbeResult {
 
 //=============== 主机名（基于芯片ID） =================
 
-// 用 eFuse MAC 生成唯一主机名：esp32s3-XXXXXX（后24bit）
 static String makeHostnameFromEfuse() {
   uint64_t efuse = ESP.getEfuseMac();              // 48-bit 唯一ID（MAC）
   uint32_t tail  = static_cast<uint32_t>(efuse & 0xFFFFFFULL);

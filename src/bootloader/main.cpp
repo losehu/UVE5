@@ -1,6 +1,186 @@
-#include <Arduino.h>
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <Update.h>
+#include <WiFiClientSecure.h>
+#include <base64.h>
 #include "esp_ota_ops.h"
 #include "esp_partition.h"
+#include <WiFi.h>
+#include "esp_wifi.h"
+// WiFi配置
+const char* ssid = "losehu";
+const char* password = "12345678";
+
+// 固件下载配置
+const char* firmwareURL = "https://k5.losehu.com:438/files/firmware.bin";
+const char* username = "family";
+const char* password_auth = "losehuyyds";
+
+// 创建安全客户端
+WiFiClientSecure client;
+
+// 查找 app0 (ota_0)
+static const esp_partition_t* find_app0(){
+  const esp_partition_t* p =
+      esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_OTA_0, "app0");
+  if(!p) p = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_OTA_0, NULL);
+  return p;
+}
+static void jump_to_app0_and_restart(){
+  const esp_partition_t* app0 = find_app0();
+  if (app0) esp_ota_set_boot_partition(app0);
+  esp_restart();
+}
+void connectToWiFi() {
+    WiFi.mode(WIFI_STA);
+delay(50);
+  Serial.println("正在连接WiFi...");
+  WiFi.begin(ssid, password);
+  
+  int attempts = 0;
+  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+    delay(1000);
+    Serial.print(".");
+    attempts++;
+  }
+  
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\nWiFi连接成功!");
+    Serial.print("IP地址: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("\nWiFi连接失败!");
+    return;
+  }
+}
+
+void checkForFirmwareUpdate() {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi未连接，无法检查更新");
+    return;
+  }
+  
+  Serial.println("开始固件更新流程...");
+    delay(50);
+
+  // 配置SSL
+  client.setInsecure(); // 跳过证书验证
+  
+  HTTPClient http;
+  
+  // 设置基本认证
+  String auth = String(username) + ":" + String(password_auth);
+  String authBase64 = base64::encode(auth);
+  
+  http.begin(client, firmwareURL);
+  delay(50);
+  http.addHeader("Authorization", "Basic " + authBase64);
+    delay(50);
+
+  Serial.println("开始下载固件...");
+      delay(50);
+  Serial.printf("Free Heap: %d bytes\n", ESP.getFreeHeap());
+  Serial.printf("Min Free Heap: %d bytes\n", ESP.getMinFreeHeap());
+  Serial.printf("Max Alloc Heap: %d bytes\n", ESP.getMaxAllocHeap());
+  Serial.printf("PSRAM Size: %d bytes\n", ESP.getPsramSize());
+  Serial.printf("Free PSRAM: %d bytes\n", ESP.getFreePsram());
+
+  int httpCode = http.GET();
+    delay(50);
+  Serial.println("get...");
+    delay(50);
+
+  if (httpCode == HTTP_CODE_OK) {
+    // 获取文件大小
+    int contentLength = http.getSize();
+    Serial.printf("固件大小: %d 字节 (约 %.2f MB)\n", 
+                  contentLength, contentLength / 1024.0 / 1024.0);
+    
+    // 检查可用闪存空间
+    if (contentLength > (ESP.getFreeSketchSpace() - 0x1000)) {
+      Serial.println("错误: 固件太大，闪存空间不足");
+      http.end();
+      return;
+    }
+    
+    Serial.println("开始写入闪存...");
+    
+    // 开始更新到app0分区
+    if (Update.begin(contentLength, U_FLASH)) {
+      Serial.println("更新进程已启动");
+      
+      // 获取数据流
+      WiFiClient* stream = http.getStreamPtr();
+      
+      // 显示进度
+      size_t written = 0;
+      size_t totalSize = contentLength;
+      uint32_t lastProgress = 0;
+      
+      // 分块读取和写入
+      while (http.connected() && written < totalSize) {
+        // 可用数据大小
+        size_t size = stream->available();
+        
+        if (size) {
+          // 读取数据块
+          uint8_t buf[1024]; // 1KB缓冲区 - 很小的RAM占用
+          size_t readSize = stream->readBytes(buf, ((size > sizeof(buf)) ? sizeof(buf) : size));
+          
+          // 写入到闪存
+          if (Update.write(buf, readSize) != readSize) {
+            Serial.println("写入闪存失败");
+            break;
+          }
+          
+          written += readSize;
+          
+          // 显示进度（每5%或更多时更新）
+          uint32_t progress = (written * 100) / totalSize;
+          if (progress >= lastProgress + 5) {
+            Serial.printf("更新进度: %d%%\n", progress);
+            lastProgress = progress;
+          }
+        }
+        delay(50);
+      }
+      
+      Serial.printf("写入完成: %d/%d 字节\n", written, totalSize);
+      
+      if (written == totalSize) {
+        Serial.println("固件数据完全写入");
+        
+        if (Update.end(true)) { // true表示验证成功
+          Serial.println("固件更新成功!");
+          Serial.println("设备将在1秒后重启...");
+          delay(1000);
+          ESP.restart();
+        } else {
+          Serial.printf("更新结束失败: %s\n", Update.errorString());
+        }
+      } else {
+        Serial.println("错误: 固件数据不完整");
+        Update.end(false);
+      }
+      
+    } else {
+      Serial.printf("无法开始更新: %s\n", Update.errorString());
+    }
+  } else {
+    Serial.printf("HTTP请求失败，错误代码: %d\n", httpCode);
+  }
+  
+  http.end();
+  Serial.println("固件更新流程结束");
+
+
+}
+
+
+
+
+
+
 
 // ========= 可按需修改 =========
 static const int BOOT_PIN = 1;           // 拉低进入更新模式
@@ -47,7 +227,7 @@ static bool read_exact(Stream& s, uint8_t* buf, size_t n, uint32_t timeout_ms){
 
 static void wait_serial_ready(Stream& s, uint32_t max_wait_ms=10000){
   uint32_t t0 = millis();
-  while (!Serial0 && (millis() - t0 < max_wait_ms)) { delay(10); }
+  while (!Serial && (millis() - t0 < max_wait_ms)) { delay(10); }
   drain_input(s, 30, 200);
 }
 
@@ -68,13 +248,7 @@ static bool wait_go(Stream& s, uint32_t max_wait_ms=60000){
   }
 }
 
-// 查找 app0 (ota_0)
-static const esp_partition_t* find_app0(){
-  const esp_partition_t* p =
-      esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_OTA_0, "app0");
-  if(!p) p = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_OTA_0, NULL);
-  return p;
-}
+
 
 // ====== 核心流程：握手 + 头 + 擦除 + START + 分块 + ACK/NAK ======
 static bool receive_and_flash_app0(Stream& s){
@@ -139,31 +313,58 @@ static bool receive_and_flash_app0(Stream& s){
   esp_restart();
   return true;
 }
-
-static void jump_to_app0_and_restart(){
-  const esp_partition_t* app0 = find_app0();
-  if (app0) esp_ota_set_boot_partition(app0);
-  esp_restart();
+void disableAMPDU() {
+  // 获取当前WiFi配置
+  wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+  
+  // 禁用AMPDU RX和TX
+  cfg.ampdu_rx_enable = 0;  // 禁用AMPDU接收
+  cfg.ampdu_tx_enable = 0;  // 禁用AMPDU发送
+  
+  // 重新初始化WiFi
+  esp_wifi_deinit();
+  esp_wifi_init(&cfg);
 }
+void setup() {
 
-void setup(){
-  pinMode(BOOT_PIN, INPUT_PULLUP);
-  Serial0.begin(115200);
-  delay(2000);
 
-  if (digitalRead(BOOT_PIN) == LOW) {
-    // 更新模式
-        Serial0.println("Update mode, stay in factory");
 
-    (void)receive_and_flash_app0(Serial0);
-    // 失败就留在 factory
-    Serial0.println("Update failed, stay in factory");
-  } else {
-            Serial0.println("Normal mode, boot app0");
+  Serial.begin(115200);
+  pinMode(3, INPUT_PULLDOWN);
+  pinMode(2, INPUT_PULLDOWN);
 
-    // 正常启动 app0
-    jump_to_app0_and_restart();
+  delay(1000); // 等待串口稳定
+  if (digitalRead(1) == HIGH) {
+    Serial.println("wifi联网烧录...");
+    // WiFi.setTxPower(WIFI_POWER_19_5dBm); // 提高发射功率
+  disableAMPDU();
+
+    delay(1000); // 等待串口稳定
+
+  // 连接WiFi
+  connectToWiFi();
+  // 检查并执行固件更新
+  checkForFirmwareUpdate();
+  }else if(digitalRead(2) == HIGH){
+        Serial.println("串口烧录...");
+
+    (void)receive_and_flash_app0(Serial);
+      delay(1000); // 等待串口稳定
+
   }
-}
+  
+  else{
 
-void loop(){ delay(1000); }
+  Serial.println("启动app0...");
+      delay(1000); // 等待串口稳定
+
+
+
+  } 
+
+    jump_to_app0_and_restart();
+
+}
+void loop() {
+  // 主循环可以执行其他任务
+}
