@@ -21,17 +21,22 @@ const unsigned long WIFI_TIMEOUT_MS = 15000;  // 连接超时（15秒）
 
 
 
-static inline void force_next_boot_to_factory() {
-  const esp_partition_t* fac =
-      esp_partition_find_first(ESP_PARTITION_TYPE_APP,
-                               ESP_PARTITION_SUBTYPE_APP_FACTORY, NULL);
-  if (fac) {
-    esp_ota_set_boot_partition(fac);  // 将“下次启动”固定成 factory
+#include "esp_ota_ops.h"
+#include "esp_system.h"
+
+void switch_to_factory_and_restart() {
+  const esp_partition_t* part = esp_partition_find_first(
+      ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_FACTORY, "factory");
+  if (part) {
+    esp_ota_set_boot_partition(part);
+    // esp_restart();
+  } else {
+    // 未找到 factory 分区
   }
 }
 
 void setup() {
-force_next_boot_to_factory();
+switch_to_factory_and_restart();
   Serial.begin(115200);
   delay(2000);
   Serial.println("\n[APP0] Hello from main app!");
@@ -75,7 +80,7 @@ void loop() {
   // TODO: 你的主应用逻辑...
   static uint32_t t0 = millis();
   if (millis() - t0 > 1000) {
-    Serial.println("[BLE] 广播中...");
+    Serial.println("[BLE11] 广播中...");
 
   delay(5000);
     t0 = millis();

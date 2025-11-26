@@ -8,8 +8,8 @@
 #include <WiFi.h>
 #include "esp_wifi.h"
 // WiFi配置
-const char *ssid = "losehu";
-const char *password = "12345678";
+const char *ssid = "CVPU";
+const char *password = "CVPU123456";
 
 // 固件下载配置
 const char *firmwareURL = "https://k5.losehu.com:438/files/firmware.bin";
@@ -506,8 +506,10 @@ void setup()
   Serial.begin(115200);
   pinMode(3, INPUT_PULLDOWN);
   pinMode(2, INPUT_PULLDOWN);
+    delay(5000); // 等待串口稳定
+    Serial.println("引导");
 
-  if (digitalRead(1) == HIGH || 1)
+  if (digitalRead(1) == HIGH )
   {
     Serial.println("wifi联网烧录...");
     WiFi.setTxPower(WIFI_POWER_19_5dBm); // 提高发射功率

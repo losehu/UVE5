@@ -5,7 +5,7 @@ env = DefaultEnvironment()
 platform = env.PioPlatform()
 
 # 你的 app0 起始地址（务必与 part.csv 一致！）
-APP0_OFFSET = 0x0B0000
+APP0_OFFSET = 0x0F0000
 
 # esptool.py 路径
 esptool_dir = platform.get_package_dir("tool-esptoolpy")
