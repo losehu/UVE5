@@ -506,21 +506,10 @@ void setup()
   Serial.begin(115200);
   pinMode(3, INPUT_PULLDOWN);
   pinMode(2, INPUT_PULLDOWN);
-    delay(5000); // 等待串口稳定
-    Serial.println("引导");
+    Serial.println("引导已经启动....");
 
-  if (digitalRead(1) == HIGH )
-  {
-    Serial.println("wifi联网烧录...");
-    WiFi.setTxPower(WIFI_POWER_19_5dBm); // 提高发射功率
-    disableAMPDU();
-    delay(1000); // 等待串口稳定
-    // 连接WiFi
-    connectToWiFi();
-    // 检查并执行固件更新
-    checkForFirmwareUpdate();
-  }
-  else if (digitalRead(2) == HIGH)
+
+   if (digitalRead(19) == HIGH)
   {
     Serial.println("串口烧录...");
 
@@ -529,7 +518,7 @@ void setup()
   }
   else
   {
-    Serial.println("启动app0...");
+    Serial.println("启动app00...");
     delay(1000); // 等待串口稳定
   }
 
