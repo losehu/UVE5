@@ -137,17 +137,4 @@ uint16_t ADC_GetValue(ADC_CH_MASK Mask) {
  * @param pVoltage Pointer to store voltage ADC value (0-4095)
  * @param pCurrent Pointer to store current ADC value (0-4095)
  */
-void BOARD_ADC_GetBatteryInfo(uint16_t *pVoltage, uint16_t *pCurrent) {
-    if (!adc_initialized) {
-        ADC_Configure();
-    }
 
-    // Start conversion and wait (ESP32 ADC is blocking)
-    ADC_Start();
-    
-    // Read voltage from ADC1_CH9 (GPIO 10)
-    *pVoltage = ADC_GetValue(ADC_CH0);
-    
-    // Read current from ADC1_CH8 (GPIO 9)
-    *pCurrent = ADC_GetValue(ADC_CH1);
-}

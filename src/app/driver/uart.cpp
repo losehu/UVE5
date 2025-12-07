@@ -2,7 +2,7 @@
  * TX = U0TXD (GPIO43) / RX = U0RXD (GPIO44)
  */
 
-#include "uart.h"
+#include "uart1.h"
 #include <Arduino.h>
 
 #define UART_NUM           0

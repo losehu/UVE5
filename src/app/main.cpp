@@ -5,7 +5,7 @@
 
 #include "driver/st7565.h"
 #include "driver/eeprom.h"
-#include "driver/i2c.h"
+#include "driver/i2c1.h"
 #include "driver/keyboard.h"
 #include "driver/adc1.h"
 #include "driver/backlight.h"

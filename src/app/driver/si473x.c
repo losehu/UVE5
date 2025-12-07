@@ -3,7 +3,7 @@
 #include "../settings.h"
 #include "../audio.h"
 #include "eeprom.h"
-#include "i2c.h"
+#include "i2c1.h"
 #include "system.h"
 #include "systick.h"
 

@@ -1,7 +1,7 @@
 #include "si.h"
 #include "../driver/bk4819.h"
 #include "../driver/si473x.h"
-#include "../driver/i2c.h"
+#include "../driver/i2c1.h"
 #include "../driver/system.h"
 #include "../driver/st7565.h"
 #include "../driver/eeprom.h"

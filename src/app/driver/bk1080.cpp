@@ -16,9 +16,8 @@
 #include "../dcs.h"
 #include "bk1080.h"
 #include "driver/gpio.h"
-#include "driver/i2c.h"
+#include "i2c1.h"
 #include "system.h"
-#include "i2c.h"
 #include "../frequencies.h"
 //#define CHAN_SPACING     0u  // 200kHz
 //#define CHAN_SPACING     1u  // 100kHz
