@@ -5,6 +5,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define MDC1200_FEC_K   7        // R=1/2 K=7 convolutional coder
 
 // 0x00 (0x81) emergency alarm
@@ -118,5 +122,9 @@ uint16_t extractHex(const char *str);
 #define MDC_NUM_ADD 0X1FFF
 #define MAX_CONTACT_NUM 21
 extern uint8_t contact_num;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -23,6 +23,10 @@
 #include "dcs.h"
 #include "frequencies.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 enum {
     RADIO_CHANNEL_UP   = 0x01u,
     RADIO_CHANNEL_DOWN = 0xFFu,
@@ -167,5 +171,9 @@ void     RADIO_SendCssTail(void);
 void     RADIO_PrepareCssTX(void);
 void     RADIO_SendEndOfTransmission(void);
 void RADIO_SetupAGC(bool listeningAM, bool disable);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

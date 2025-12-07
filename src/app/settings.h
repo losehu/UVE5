@@ -24,6 +24,11 @@
 #include "helper/battery.h"
 #include "radio.h"
 #include "driver/backlight.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #if ENABLE_CHINESE_FULL==4
 
 enum POWER_OnDisplayMode_t {
@@ -290,5 +295,9 @@ void SETTINGS_SaveBatteryCalibration(const uint16_t * batteryCalibration);
 void SETTINGS_UpdateChannel(uint8_t channel, const VFO_Info_t *pVFO, bool keep);
 void SETTINGS_WriteBuildOptions(void);
 extern int               key_dir;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

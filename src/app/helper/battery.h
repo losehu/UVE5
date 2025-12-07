@@ -20,6 +20,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern uint16_t          gBatteryCalibration[6];
 extern uint16_t          gBatteryCurrentVoltage;
 extern uint16_t          gBatteryCurrent;
@@ -44,5 +48,9 @@ typedef enum {
 unsigned int BATTERY_VoltsToPercent(unsigned int voltage_10mV);
 void BATTERY_GetReadings(bool bDisplayBatteryLevel);
 void BATTERY_TimeSlice500ms(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

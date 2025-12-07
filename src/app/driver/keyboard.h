@@ -25,6 +25,7 @@ extern "C" {
 #define GPIO_KEY5   ((gpio_num_t)13)  // Column 1 (Shared with I2C SCL)
 #define GPIO_KEY6   ((gpio_num_t)12)  // Column 2
 #define GPIO_KEY7   ((gpio_num_t)11)  // Column 3
+#define GPIOA_PIN_VOICE_0  GPIO_KEY6
 
 // Independent button pins (active low)
 // Note: These need to be defined based on your hardware

@@ -20,6 +20,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // 引脚定义
 // RST IO45
 // CS IO7
@@ -52,5 +56,9 @@ void ST7565_BlitLine(unsigned line);
 void ST7565_BlitStatusLine(void);
 void ST7565_FillScreen(uint8_t value);
 void ST7565_FixInterfGlitch(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // DRIVER_ST7565_H

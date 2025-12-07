@@ -21,6 +21,10 @@
 #include <stdint.h>
 #include "bk1080-regs.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern uint16_t BK1080_BaseFrequency;
 extern uint16_t BK1080_FrequencyDeviation;
 
@@ -30,6 +34,10 @@ void BK1080_WriteRegister(BK1080_Register_t Register, uint16_t Value);
 void BK1080_Mute(bool Mute);
 void BK1080_SetFrequency(uint16_t Frequency);
 void BK1080_GetFrequencyDeviation(uint16_t Frequency);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 

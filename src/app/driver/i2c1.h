@@ -20,6 +20,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // I2C 引脚定义
 // SDA -> IO13
 // SCL -> IO14
@@ -43,5 +47,9 @@ int I2C_Write(uint8_t Data);
 
 int I2C_ReadBuffer(void *pBuffer, uint8_t Size);
 int I2C_WriteBuffer(const void *pBuffer, uint8_t Size);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // DRIVER_I2C_H

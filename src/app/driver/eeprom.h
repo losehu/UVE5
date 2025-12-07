@@ -23,9 +23,17 @@
 // 芯片通常使用 A0, A1, A2 三个地址引脚来扩展地址空间
 #define EEPROM_DEVICE_BASE_ADDR 0xA0
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // EEPROM 操作函数
 void EEPROM_Init(void);
 void EEPROM_ReadBuffer(uint32_t Address, void *pBuffer, uint8_t Size);
 void EEPROM_WriteBuffer(uint32_t Address, const void *pBuffer, uint8_t Size);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // DRIVER_EEPROM_H

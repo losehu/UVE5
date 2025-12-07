@@ -19,9 +19,17 @@
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void SYSTICK_Init(void);
 void SYSTICK_DelayUs(uint32_t Delay);
 void SYSTICK_Delay250ns(const uint32_t Delay);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 

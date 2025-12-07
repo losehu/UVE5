@@ -42,6 +42,8 @@
 #include "helper/battery.h"
 #include "misc.h"
 #include "settings.h"
+#include "driver/i2c1.h"
+#include "driver/bk1080.h"
 
 #if defined(ENABLE_OVERLAY)
 #include "sram-overlay.h"
@@ -79,18 +81,25 @@ void BOARD_ADC_Init(void) {
 
 
 void BOARD_Init(void) {
-    BOARD_PORTCON_Init();
-    BOARD_GPIO_Init();
-    BACKLIGHT_InitHardware();
-    BOARD_ADC_Init();
-    ST7565_Init();
-#ifdef ENABLE_FMRADIO
-    BK1080_Init(0, false);
-#endif
 
-#if defined(ENABLE_UART) || defined(ENABLED_AIRCOPY)
-    CRC_Init();
-#endif
+    // BOARD_PORTCON_Init();
+    // BOARD_GPIO_Init();
+    // BACKLIGHT_InitHardware();
+    // BOARD_ADC_Init();
+    // ST7565_Init();
+    // BK1080_Init(0, false);
+
+
+    ADC_Configure();
+    BACKLIGHT_InitHardware();
+    I2C_Init();
+    BK1080_Init(0, false);
+    // 初始化设备
+    ST7565_Init();
+    BK4819_Init();
+    KEYBOARD_Init();
+    UART_Init(115200);
+
 
 }
 

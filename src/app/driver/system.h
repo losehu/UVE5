@@ -20,8 +20,16 @@
 #include <stdint.h>
 #include <Arduino.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void SYSTEM_DelayMs(uint32_t Delay);
 void SYSTEM_ConfigureClocks(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 

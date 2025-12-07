@@ -20,6 +20,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void     BOARD_FLASH_Init(void);
 void     BOARD_GPIO_Init(void);
 void     BOARD_PORTCON_Init(void);
@@ -28,6 +32,9 @@ void     BOARD_Init(void);
 void JUMP_TO_FLASH(uint32_t flash_add,uint32_t stack_add);
         void write_to_memory(uint32_t address, uint32_t data) ;
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 

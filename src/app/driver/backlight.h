@@ -19,6 +19,11 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define BACKLIGHT_IO 8
 extern uint16_t gBacklightCountdown_500ms;
 extern uint8_t gBacklightBrightness;
@@ -38,6 +43,10 @@ bool BACKLIGHT_IsOn();
 void BACKLIGHT_SetBrightness(uint8_t brigtness);
 uint8_t BACKLIGHT_GetBrightness(void);
 extern unsigned short BACKLIGHT_MAP[7];
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 

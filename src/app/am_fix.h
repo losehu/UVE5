@@ -20,6 +20,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef ENABLE_AM_FIX
 void AM_fix_init(void);
 void AM_fix_reset(const unsigned vfo);
@@ -31,6 +35,10 @@ void AM_fix_10ms(const unsigned vfo);
 
 int8_t AM_fix_get_gain_diff();
 	void AM_fix_enable(bool on);
+#endif
+
+#ifdef __cplusplus
+}
 #endif
 
 #endif

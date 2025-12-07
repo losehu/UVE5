@@ -17,8 +17,17 @@
 #ifndef UI_WELCOME_H
 #define UI_WELCOME_H
 #include "helper/boot.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 //void UI_DisplayReleaseKeys(BOOT_Mode_t BootMode);
 void UI_DisplayWelcome(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 

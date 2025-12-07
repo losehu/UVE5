@@ -137,4 +137,9 @@ uint16_t ADC_GetValue(ADC_CH_MASK Mask) {
  * @param pVoltage Pointer to store voltage ADC value (0-4095)
  * @param pCurrent Pointer to store current ADC value (0-4095)
  */
-
+void BOARD_ADC_GetBatteryInfo(uint16_t *pVoltage, uint16_t *pCurrent) {
+    ADC_Start();
+    while (!ADC_CheckEndOfConversion(ADC_CH9)) {}
+    *pVoltage = ADC_GetValue(ADC_CH4);
+    *pCurrent = ADC_GetValue(ADC_CH9);
+}

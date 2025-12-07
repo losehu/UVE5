@@ -23,6 +23,10 @@
 #include "../frequencies.h"
 #include "../radio.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef ENABLE_MESSENGER_NOTIFICATION
 extern bool gPlayMSGRing;
 #endif
@@ -40,6 +44,10 @@ void APP_Update(void);
 void APP_TimeSlice10ms(void);
 
 void APP_TimeSlice500ms(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 
