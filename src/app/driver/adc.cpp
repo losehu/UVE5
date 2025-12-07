@@ -113,11 +113,11 @@ uint16_t ADC_GetValue(ADC_CH_MASK Mask) {
 
     int adc_raw = 0;
     
-    if (Mask == ADC_CH0) {
+    if (Mask == ADC_CH4) {
         // Battery Current - GPIO 9
         adc_raw = analogRead(ADC_GPIO_CURRENT);
         last_current_value = (uint16_t)adc_raw;
-    } else if (Mask == ADC_CH1) {
+    } else if (Mask == ADC_CH9) {
         // Battery Voltage - GPIO 10
         adc_raw = analogRead(ADC_GPIO_VOLTAGE);
         last_voltage_value = (uint16_t)adc_raw;
@@ -142,4 +142,6 @@ void BOARD_ADC_GetBatteryInfo(uint16_t *pVoltage, uint16_t *pCurrent) {
     while (!ADC_CheckEndOfConversion(ADC_CH9)) {}
     *pVoltage = ADC_GetValue(ADC_CH4);
     *pCurrent = ADC_GetValue(ADC_CH9);
+    Serial.println("Battery Voltage ADC Value: " + String(*pVoltage));
+    Serial.println("Battery Current ADC Value: " + String(*pCurrent));
 }
