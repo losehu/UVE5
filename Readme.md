@@ -2,8 +2,11 @@
 
 > 基于 ESP32-S3 的 Quansheng UV-K5 对讲机主控固件
 
-## 📋 项目简介
+> 硬件在固件测试完成后发布
+![alt text](img.png)
 
+## 📋 项目简介
+![alt text](cf841e602244e825aae333f2b318ddb6_720.png)
 本项目将 ESP32-S3 作为 Quansheng UV-K5 对讲机的主控芯片,替代原有的 DP32G030 MCU。通过 ESP32-S3 强大的处理能力和丰富的外设,为 UV-K5 带来以下增强功能:
 
 ### ✨ 主要特性
