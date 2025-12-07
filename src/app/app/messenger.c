@@ -13,11 +13,11 @@
 #include "../driver/system.h"
 #include "../app/messenger.h"
 #include "../ui/ui.h"
-#include "../driver/uart.h"
+#include "../driver/uart1.h"
 #include "stdbool.h"
 
 #if defined(ENABLE_UART)
-#include "../driver/uart.h"
+#include "../driver/uart1.h"
 #endif
 #ifdef ENABLE_MESSENGER
 bool stop_mdc_flag=0;

@@ -1,7 +1,7 @@
 
 #include "../driver/bk4819.h"
 #include "../driver/crc.h"
-#include "../driver/uart.h"
+#include "../driver/uart1.h"
 #include "mdc1200.h"
 #include "../misc.h"
 #include <string.h>

@@ -15,7 +15,7 @@
  */
 
 #include <string.h>
-#include "../driver/uart.h"
+#include "../driver/uart1.h"
 #include "../driver/st7565.h"
 #include "../font.h"
 #include "menu.h"

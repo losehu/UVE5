@@ -7,9 +7,9 @@
 #include "driver/eeprom.h"
 #include "driver/i2c.h"
 #include "driver/keyboard.h"
-#include "driver/adc.h"
+#include "driver/adc1.h"
 #include "driver/backlight.h"
-#include "driver/uart.h"
+#include "driver/uart1.h"
 #include "driver/bk1080.h"
 #include "driver/bk4819.h"
 // 按键名称映射表

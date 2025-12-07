@@ -16,7 +16,7 @@
 #include <stdio.h>
 #include "mdc1200.h"
 #include <string.h>
-#include "../driver/uart.h"
+#include "../driver/uart1.h"
 #include "../ui/helper.h"
 
 #if !defined(ENABLE_OVERLAY)

@@ -6,7 +6,7 @@
  * - ADC1_CH9 (GPIO 10): Battery Voltage measurement
  */
 
-#include "adc.h"
+#include "adc1.h"
 #include <Arduino.h>
 
 static bool adc_initialized = false;

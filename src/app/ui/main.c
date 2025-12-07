@@ -17,7 +17,7 @@
 #include "../chinese.h"
 #include <string.h>
 #include <stdlib.h>  // abs()
-#include "../driver/uart.h"
+#include "../driver/uart1.h"
 #include "../app/dtmf.h"
 #include "../font.h"
 #include "../app/chFrScanner.h"

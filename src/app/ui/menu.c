@@ -17,7 +17,7 @@
 #include <string.h>
 #include <stdlib.h>  // abs()
 #include "../bitmaps.h"
-#include "../driver/uart.h"
+#include "../driver/uart1.h"
 #include "../app/dtmf.h"
 #include "../app/menu.h"
 #include "../board.h"

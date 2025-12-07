@@ -13,7 +13,7 @@
  *     See the License for the specific language governing permissions and
  *     limitations under the License.
  */
-#include "../driver/uart.h"
+#include "../driver/uart1.h"
 #include <string.h>
 #include "../driver/keyboard.h"
 #include "../driver/eeprom.h"

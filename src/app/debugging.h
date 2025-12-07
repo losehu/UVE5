@@ -1,7 +1,7 @@
 #ifndef DEBUGGING_H
 #define DEBUGGING_H
 #ifdef ENABLE_UART
-#include "driver/uart.h"
+#include "driver/uart1.h"
 #include "driver/bk4819.h"
 #include "string.h"
 #include <stdio.h>

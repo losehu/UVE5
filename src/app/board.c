@@ -23,7 +23,7 @@
 #include "board.h"
 #include "driver/gpio.h"
 
-#include "driver/adc.h"
+#include "driver/adc1.h"
 #include "driver/backlight.h"
 
 #include "sram-overlay.h"

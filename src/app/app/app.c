@@ -34,7 +34,7 @@
 #include "app.h"
 #include "chFrScanner.h"
 #include "dtmf.h"
-#include "../driver/uart.h"
+#include "../driver/uart1.h"
 
 #ifdef ENABLE_FMRADIO
 #include "fm.h"
