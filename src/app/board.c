@@ -45,6 +45,7 @@
 #include "driver/i2c1.h"
 #include "driver/bk1080.h"
 #include "driver/bk4819.h"
+#include "driver/uart1.h"
 #if defined(ENABLE_OVERLAY)
 #include "sram-overlay.h"
 #endif

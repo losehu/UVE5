@@ -59,6 +59,7 @@ void overlay_FLASH_SetMaskSel(FLASH_MASK_SELECTION Mask)
 
 void overlay_FLASH_MaskUnlock(void)
 {
+	while(1);
 }
 
 void overlay_FLASH_Lock(void)
@@ -105,6 +106,7 @@ void overlay_FLASH_SetProgramTime(void)
 
 void overlay_SystemReset(void)
 {
+	while(1);
 }
 
 uint32_t overlay_FLASH_ReadNvrWord(uint32_t Offset)
