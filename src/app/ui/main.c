@@ -13,6 +13,7 @@
  *     See the License for the specific language governing permissions and
  *     limitations under the License.
  */
+#include <stdio.h>
 #include "../app/mdc1200.h"
 #include "../chinese.h"
 #include <string.h>
@@ -418,7 +419,7 @@ void UI_DisplayMain(void) {
                 || gDTMF_CallState != DTMF_CALL_STATE_NONE || gDTMF_IsTx
 #endif
                     ) {
-                char *pPrintStr = "";
+                const char *pPrintStr = "";
 
                 // show DTMF stuff
 #ifdef ENABLE_DTMF_CALLING
@@ -508,7 +509,7 @@ void UI_DisplayMain(void) {
         } else if (IS_FREQ_CHANNEL(gEeprom.ScreenChannel[vfo_num])) {    // frequency mode
             // show the frequency band number
             const unsigned int x = 2;
-            char *buf = gEeprom.VfoInfo[vfo_num].pRX->Frequency < _1GHz_in_KHz ? "" : "+";
+            const char *buf = gEeprom.VfoInfo[vfo_num].pRX->Frequency < _1GHz_in_KHz ? "" : "+";
             const char *format = last_rx_vfo == vfo_num ? "F%u%s." : "F%u%s";
             sprintf(String, format, 1 + gEeprom.ScreenChannel[vfo_num] - FREQ_CHANNEL_FIRST, buf);
             UI_PrintStringSmall(String, x, 0, line + 1);
@@ -816,7 +817,7 @@ void UI_DisplayMain(void) {
 
         // show the TX/RX reverse symbol
         if (vfoInfo->FrequencyReverse) {
-            char *flag = vfoInfo->FrequencyReverse == 1 ? "R" : "T";
+            const char *flag = vfoInfo->FrequencyReverse == 1 ? "R" : "T";
 #if ENABLE_CHINESE_FULL != 4 || defined(ENABLE_ENGLISH)
             UI_PrintStringSmall(flag, LCD_WIDTH + 62, 0, line + 1);//中文信道1
 #else

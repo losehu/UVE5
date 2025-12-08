@@ -316,7 +316,7 @@ void DTMF_HandleRequest(void)
     if (gDTMF_RX_index >= 2)
     {	// look for ACK reply
 
-char *pPrintStr = "AB";
+		const char *pPrintStr = "AB";
 
         Offset = gDTMF_RX_index - strlen(pPrintStr);
 

@@ -29,7 +29,7 @@
 #include "am_fix.h"
 #include "audio.h"
 #include "misc.h"
-
+#include "adc1.h"
 
 //#define ENABLE_DOPPLER
 #ifdef ENABLE_SCAN_RANGES

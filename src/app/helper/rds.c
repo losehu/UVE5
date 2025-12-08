@@ -392,8 +392,8 @@ bool SI47XX_GetLocalTime(Time *time) {
 
 void SI47XX_GetProgramType(char buffer[17]) {
   typedef struct {
-    char *pRds;
-    char *pRdbs;
+    const char *pRds;
+    const char *pRdbs;
   } RDS_PTY;
 
   static const RDS_PTY PTY_NAMES[] = {
