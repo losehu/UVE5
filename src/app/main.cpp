@@ -7,7 +7,7 @@
 
 #include "driver/gpio.h"
 #include "app/si.h"
-
+#include "app/scheduler.h"
 #include "driver/i2c.h"
 #include "driver/system.h"
 #include "frequencies.h"
@@ -107,6 +107,7 @@ void setup() {
   Serial.println("Initializing devices...");
   BOARD_Init();
 
+  SCHEDULER_Init();
 
   
     memset(gDTMF_String, '-', sizeof(gDTMF_String));

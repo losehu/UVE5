@@ -14,6 +14,7 @@
  *     limitations under the License.
  */
 
+#include <Arduino.h>
 #include "app/chFrScanner.h"
 #ifdef ENABLE_FMRADIO
 	#include "app/fm.h"
@@ -44,7 +45,40 @@
 
 static volatile uint32_t gGlobalSysTickCounter;
 
+// ESP32-S3 硬件定时器
+static hw_timer_t *timer = NULL;
+static portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
+
 void SystickHandler(void);
+void SCHEDULER_Init(void);
+
+// 定时器中断回调函数 (在 ISR 上下文中执行)
+void IRAM_ATTR onTimer(void)
+{
+	portENTER_CRITICAL_ISR(&timerMux);
+	SystickHandler();
+	portEXIT_CRITICAL_ISR(&timerMux);
+}
+
+// 初始化调度器定时器
+void SCHEDULER_Init(void)
+{
+	// 配置硬件定时器
+	// ESP32-S3 主频 240MHz
+	// 定时器 0, 分频器 240 (240MHz / 240 = 1MHz, 每个计数 = 1us)
+	// 参数: timer_num, divider, count_up
+	timer = timerBegin(0, 240, true);
+	
+	// 绑定中断回调函数
+	timerAttachInterrupt(timer, &onTimer, true);
+	
+	// 设置定时器报警值: 10000us = 10ms
+	// 参数: timer, alarm_value, auto_reload
+	timerAlarmWrite(timer, 10000, true);
+	
+	// 启动定时器
+	timerAlarmEnable(timer);
+}
 
 // we come here every 10ms
 void SystickHandler(void)

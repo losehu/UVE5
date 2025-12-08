@@ -44,7 +44,7 @@
 #include "settings.h"
 #include "driver/i2c1.h"
 #include "driver/bk1080.h"
-
+#include "driver/bk4819.h"
 #if defined(ENABLE_OVERLAY)
 #include "sram-overlay.h"
 #endif
@@ -89,17 +89,20 @@ void BOARD_Init(void) {
     // ST7565_Init();
     // BK1080_Init(0, false);
 
-
-    ADC_Configure();
+ADC_Configure();
     BACKLIGHT_InitHardware();
     I2C_Init();
     BK1080_Init(0, false);
     // 初始化设备
     ST7565_Init();
-    BK4819_Init();
+
+
     KEYBOARD_Init();
     UART_Init(115200);
+        delay(100);
 
+    BK4819_Init();
+        delay(100);
 
 }
 

@@ -142,6 +142,5 @@ void BOARD_ADC_GetBatteryInfo(uint16_t *pVoltage, uint16_t *pCurrent) {
     while (!ADC_CheckEndOfConversion(ADC_CH9)) {}
     *pVoltage = ADC_GetValue(ADC_CH4);
     *pCurrent = ADC_GetValue(ADC_CH9);
-    Serial.println("Battery Voltage ADC Value: " + String(*pVoltage));
-    Serial.println("Battery Current ADC Value: " + String(*pCurrent));
+
 }
