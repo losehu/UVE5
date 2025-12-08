@@ -967,7 +967,7 @@ void UI_DisplayMenu(void) {
                     edit_index = -1;
                 if (edit_index < 0) {    // show the channel name
                     SETTINGS_FetchChannelName(String, gSubMenuSelection);
-                    char *pPrintStr = String[0] ? String : "--";
+                    const char *pPrintStr = String[0] ? String : "--";
 #if ENABLE_CHINESE_FULL == 4 && !defined(ENABLE_ENGLISH)
                     show_move_flag=1;
 #endif
@@ -1437,7 +1437,7 @@ void UI_DisplayMenu(void) {
     if (UI_MENU_GetCurrentMenuId() == MENU_SLIST1 || UI_MENU_GetCurrentMenuId() == MENU_SLIST2) {
         i = (UI_MENU_GetCurrentMenuId() == MENU_SLIST1) ? 0 : 1;
 
-        char *pPrintStr = String;
+        const char *pPrintStr = String;
 
         if (gSubMenuSelection < 0) {
             pPrintStr = "NULL";
@@ -1519,7 +1519,7 @@ void UI_DisplayMenu(void) {
          UI_MENU_GetCurrentMenuId() == MENU_MDC_ID ||
          #endif
          UI_MENU_GetCurrentMenuId() == MENU_DEL_CH) && gAskForConfirmation) {    // display confirmation
-        char *pPrintStr = (gAskForConfirmation == 1) ? "SURE?" : "WAIT!";
+        const char *pPrintStr = (gAskForConfirmation == 1) ? "SURE?" : "WAIT!";
         if (UI_MENU_GetCurrentMenuId() == MENU_MEM_CH || UI_MENU_GetCurrentMenuId() == MENU_MEM_NAME ||
              UI_MENU_GetCurrentMenuId() == MENU_DEL_CH)
             UI_PrintStringSmall(pPrintStr, menu_item_x1 - 12, menu_item_x2, 5);

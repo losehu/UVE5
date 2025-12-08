@@ -13,6 +13,7 @@
  *     See the License for the specific language governing permissions and
  *     limitations under the License.
  */
+#include <stdio.h>
 #ifdef ENABLE_MESSENGER
 #include "../app/messenger.h"
 #endif
@@ -91,7 +92,7 @@ void UI_DisplayStatus() {
 #endif
     { // SCAN indicator
         if (gScanStateDir != SCAN_OFF || SCANNER_IsScanning()) {
-            char *s = "";
+            const char *s = "";
             if (IS_MR_CHANNEL(gNextMrChannel) && !SCANNER_IsScanning()) { // channel mode
                 switch (gEeprom.SCAN_LIST_DEFAULT) {
                     case 0:

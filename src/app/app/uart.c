@@ -36,6 +36,7 @@
 #include "../driver/crc.h"
 #include "../driver/eeprom.h"
 #include "../driver/uart1.h"
+#include "../driver/adc1.h"
 #include "../functions.h"
 #include "../misc.h"
 #include "../settings.h"
@@ -498,12 +499,12 @@ bool UART_IsCommandAvailable(void) {
     uint16_t Size;
     uint16_t CRC;
     uint16_t CommandLength;
-    
+
     // Read available data from UART into buffer
     while (UART_Available() > 0 && uart_buffer_tail < sizeof(UART_DMA_Buffer)) {
         UART_DMA_Buffer[uart_buffer_tail++] = (uint8_t)UART_Read();
     }
-    
+
     uint16_t DmaLength = uart_buffer_tail;
 
 

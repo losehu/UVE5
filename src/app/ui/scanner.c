@@ -13,6 +13,7 @@
  *     See the License for the specific language governing permissions and
  *     limitations under the License.
  */
+#include <stdio.h>
 #include "../chinese.h"
 #include <stdbool.h>
 #include <string.h>
@@ -26,7 +27,7 @@
 
 void UI_DisplayScanner(void) {
     char String[16] = {0};
-    char *pPrintStr = String;
+    const char *pPrintStr = String;
     bool bCentered;
     uint8_t Start;
 

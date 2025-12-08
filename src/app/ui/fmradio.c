@@ -15,7 +15,7 @@
  */
 
 #ifdef ENABLE_FMRADIO
-
+#include <stdio.h>
 #include <string.h>
 
 #include "app/fm.h"
@@ -30,7 +30,7 @@
 void UI_DisplayFM(void)
 {
     char String[16] = {0};
-    char *pPrintStr = String;
+    const char *pPrintStr = String;
 UI_DisplayClear();
     UI_PrintStringSmall("FM", 0, 127, 0);
 

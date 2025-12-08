@@ -285,7 +285,7 @@ extern const char gSubMenu_BATTYP[2][8];
 extern const char gSubMenu_SCRAMBLER[11][7];
 
 typedef struct {
-    char *name;
+    const char *name;
     uint8_t id;
 } t_sidefunction;
 extern const uint8_t gSubMenu_SIDEFUNCTIONS_size;
