@@ -198,7 +198,7 @@ bool          g_VOX_Lost;
     uint16_t      gVoxPauseCountdown;
 #endif
 bool g_SquelchLost;
-volatile uint16_t gFlashLightBlinkCounter;
+volatile uint32_t gFlashLightBlinkCounter;
 uint8_t gNextMrChannel;
 ReceptionMode_t gRxReceptionMode;
 unsigned int last_rx_vfo = -1;

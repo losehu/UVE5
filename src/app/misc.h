@@ -281,7 +281,7 @@ extern bool              g_VOX_Lost;
 // true means we are receiving signal
 extern bool                  g_SquelchLost;
 
-extern volatile uint16_t     gFlashLightBlinkCounter;
+extern volatile uint32_t     gFlashLightBlinkCounter;
 extern uint8_t               gNextMrChannel;
 extern ReceptionMode_t       gRxReceptionMode;
 
