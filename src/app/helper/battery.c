@@ -105,7 +105,8 @@ void BATTERY_GetReadings(const bool bDisplayBatteryLevel) {
         gBatteryDisplayLevel = 1;
         const uint8_t levels[] = {5, 17, 41, 65, 88};
         uint8_t perc = BATTERY_VoltsToPercent(gBatteryVoltageAverage);
-        for (uint8_t i = 6; i >= 1; i--) {
+        /* Prevent out-of-bounds access when i == 1 (i-2 would underflow) */
+        for (int i = 6; i >= 2; i--) {
             if (perc > levels[i - 2]) {
                 gBatteryDisplayLevel = i;
                 break;
