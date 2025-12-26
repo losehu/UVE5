@@ -116,18 +116,30 @@ uint16_t ADC_GetValue(ADC_CH_MASK Mask) {
     if (Mask == ADC_CH4) {
         // Battery Current - GPIO 9
         adc_raw = analogRead(ADC_GPIO_CURRENT);
-        last_current_value = (uint16_t)adc_raw;
     } else if (Mask == ADC_CH9) {
         // Battery Voltage - GPIO 10
         adc_raw = analogRead(ADC_GPIO_VOLTAGE);
-        last_voltage_value = (uint16_t)adc_raw;
     } else {
         // Other channels not implemented
         return 0;
     }
 
+    /*
+     * Some cores return 10-bit values (0..1023). Normalize to 12-bit (0..4095)
+     * so rest of firmware can use consistent 12-bit range.
+     */
+    if (adc_raw <= 1023) {
+        adc_raw = (adc_raw * 4095 + 511) / 1023; // scaled with rounding
+    }
+
+    if (Mask == ADC_CH4) {
+        last_current_value = (uint16_t)adc_raw;
+    } else {
+        last_voltage_value = (uint16_t)adc_raw;
+    }
+
     // Return 12-bit raw value (0-4095)
-    return (uint16_t)(adc_raw & 0xFFF);
+    return (uint16_t)(adc_raw);
 }
 
 /**
