@@ -19,14 +19,12 @@
 #endif
 
 #include "audio.h"
-#include "driver/gpio.h"
 
 #ifdef ENABLE_FMRADIO
 #include "driver/bk1080.h"
 #endif
 
 #include "driver/bk4819.h"
-#include "driver/gpio.h"
 #include "driver/system.h"
 #include "driver/systick.h"
 #include "functions.h"

@@ -18,8 +18,11 @@
 #define DRIVER_SYSTEM_H
 
 #include <stdint.h>
+#ifndef ENABLE_OPENCV
 #include <Arduino.h>
-
+#else
+#include "../opencv/Arduino.hpp"
+#endif
 #ifdef __cplusplus
 extern "C" {
 #endif

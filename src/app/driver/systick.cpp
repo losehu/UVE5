@@ -15,8 +15,11 @@
  */
 
 #include "systick.h"
+#ifndef ENABLE_OPENCV
 #include <Arduino.h>
-
+#else
+#include "../opencv/Arduino.hpp"
+#endif
 // ESP32 上使用硬件定时器 API 进行延时
 
 void SYSTICK_Init(void) {

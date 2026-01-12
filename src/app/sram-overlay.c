@@ -22,87 +22,8 @@ uint32_t                  overlay_FLASH_MainClock;
 uint32_t                  overlay_FLASH_ClockMultiplier;
 uint32_t                  overlay_0x20000478;         // Nothing is using this???
 
-void overlay_FLASH_RebootToBootloader(void)
-{
-}
 
-bool overlay_FLASH_IsBusy(void)
-{
-	return false;
-}
 
-bool overlay_FLASH_IsInitComplete(void)
-{
-	return false;
-}
-
-bool overlay_FLASH_IsNotEmpty(void)
-{
-	return false;
-}
-
-void overlay_FLASH_Start(void)
-{
-}
-
-void overlay_FLASH_Init(FLASH_READ_MODE ReadMode)
-{
-}
-
-void overlay_FLASH_MaskLock(void)
-{
-}
-
-void overlay_FLASH_SetMaskSel(FLASH_MASK_SELECTION Mask)
-{
-}
-
-void overlay_FLASH_MaskUnlock(void)
-{
-	while(1);
-}
-
-void overlay_FLASH_Lock(void)
-{
-}
-
-void overlay_FLASH_Unlock(void)
-{
-}
-
-uint32_t overlay_FLASH_ReadByAHB(uint32_t Offset)
-{
-	return 0;
-}
-
-uint32_t overlay_FLASH_ReadByAPB(uint32_t Offset)
-{
-	return 0;
-}
-
-void overlay_FLASH_SetArea(FLASH_AREA Area)
-{
-}
-
-void overlay_FLASH_SetReadMode(FLASH_READ_MODE Mode)
-{
-}
-
-void overlay_FLASH_SetEraseTime(void)
-{
-}
-
-void overlay_FLASH_WakeFromDeepSleep(void)
-{
-}
-
-void overlay_FLASH_SetMode(FLASH_MODE Mode)
-{
-}
-
-void overlay_FLASH_SetProgramTime(void)
-{
-}
 
 void overlay_SystemReset(void)
 {

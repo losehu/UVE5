@@ -1802,11 +1802,9 @@ UI_MENU_GetCurrentMenuId() == MENU_MDC_ID
 
                         MENU_AcceptSetting();
 
-#if defined(ENABLE_OVERLAY)
-                        overlay_FLASH_RebootToBootloader();
-#else
+
                         esp_restart();
-#endif
+
                     }
 
                     gFlagAcceptSetting = true;

@@ -1,6 +1,11 @@
 #ifdef ENABLE_FLASHLIGHT
 
+#ifndef ENABLE_OPENCV
 #include <Arduino.h>
+#else
+#include "opencv/Arduino.hpp"
+#endif
+#include <stdbool.h>
 #include "flashlight.h"
 
 enum FlashlightMode_t  gFlashLightState;

@@ -1,19 +1,17 @@
+#ifndef ENABLE_OPENCV
 #include <Arduino.h>
 #include "esp_ota_ops.h"
 #include "esp_partition.h"
-#include "lib/shared_flash.h"
-
-
-
-#include "driver/gpio.h"
+#else
+#include "opencv/Arduino.hpp"
+#endif
+#include "../lib/shared_flash.h"
 #include "app/si.h"
-#include "app/scheduler.h"
-#include "driver/i2c.h"
+#include "scheduler.h"
 #include "driver/system.h"
 #include "frequencies.h"
 #include "misc.h"
 #include "app/doppler.h"
-#include "driver/uart.h"
 #include "string.h"
 #include <stdio.h>
 #include "ui/helper.h"
@@ -61,7 +59,6 @@
 #include "app/dtmf.h"
 #include "driver/backlight.h"
 #include "driver/bk4819.h"
-#include "driver/gpio.h"
 #include "driver/system.h"
 #include "driver/systick.h"
 
@@ -89,16 +86,6 @@
 
 
 
-void switch_to_factory_and_restart() {
-  const esp_partition_t* part = esp_partition_find_first(
-      ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_FACTORY, "factory");
-  if (part) {
-    esp_ota_set_boot_partition(part);
-    // esp_restart();
-  } else {
-    // 未找到 factory 分区
-  }
-}
 
  
 void setup() {

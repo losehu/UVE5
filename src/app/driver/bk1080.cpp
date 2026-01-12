@@ -15,7 +15,6 @@
  */
 #include "../dcs.h"
 #include "bk1080.h"
-#include "driver/gpio.h"
 #include "i2c1.h"
 #include "system.h"
 #include "../frequencies.h"

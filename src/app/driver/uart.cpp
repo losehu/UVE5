@@ -3,8 +3,11 @@
  */
 
 #include "uart1.h"
+#ifndef ENABLE_OPENCV
 #include <Arduino.h>
-
+#else
+#include "../opencv/Arduino.hpp"
+#endif
 #define UART_NUM           0
 #define UART_TX_PIN        43
 #define UART_RX_PIN        44

@@ -23,7 +23,6 @@
 #endif
 
 #include "audio.h"
-#include "driver/gpio.h"
 #include "dcs.h"
 #include "driver/backlight.h"
 #ifdef ENABLE_MESSENGER
@@ -37,7 +36,6 @@
 #endif
 
 #include "driver/bk4819.h"
-#include "driver/gpio.h"
 #include "driver/system.h"
 #include "driver/st7565.h"
 #include "frequencies.h"

@@ -19,7 +19,11 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#ifndef ENABLE_OPENCV
 #include <Arduino.h>
+#else
+#include "opencv/Arduino.hpp"
+#endif
 #define AUDIO_PATH 47  // audio
 
 enum BEEP_Type_t

@@ -14,8 +14,12 @@
  *     limitations under the License.
  */
 
+#ifndef ENABLE_OPENCV
 #include <Arduino.h>
 #include <esp_system.h>
+#else
+#include "../opencv/Arduino.hpp"
+#endif
 #include <string.h>
 #include "../font.h"
 
@@ -720,11 +724,9 @@ void UART_HandleCommand(void) {
             break;
 
         case 0x05DD:
-#if defined(ENABLE_OVERLAY)
-            overlay_FLASH_RebootToBootloader();
-#else
+
             esp_restart();
-#endif
+
             break;
 #ifdef ENABLE_UART_RW_BK_REGS
             case 0x0601:

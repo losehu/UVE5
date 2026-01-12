@@ -330,7 +330,7 @@ extern unsigned int last_rx_vfo;
 int32_t NUMBER_AddWithWraparound(int32_t Base, int32_t Add, int32_t LowerLimit, int32_t UpperLimit);
 unsigned long StrToUL(const char * str);
 void FUNCTION_NOP();
-inline bool SerialConfigInProgress() { return gSerialConfigCountDown_500ms != 0; }
+static inline bool SerialConfigInProgress(void) { return gSerialConfigCountDown_500ms != 0; }
 
 
 #endif

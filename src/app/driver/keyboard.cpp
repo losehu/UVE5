@@ -10,11 +10,13 @@
  */
 
 #include "keyboard.h"
+#ifndef ENABLE_OPENCV
 #include <driver/gpio.h>
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
-#include <esp_timer.h>
 #include <esp_rom_sys.h>
+#else
+#include "opencv/Arduino.hpp"
+#endif
+
 
 // Global Variables
 KEY_Code_t gKeyReading0 = KEY_INVALID;

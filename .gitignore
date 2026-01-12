@@ -5,3 +5,6 @@
 .vscode/ipch
 uv-k5-firmware-custom/
 .DS_Store
+*.d
+*.o
+/bin/*

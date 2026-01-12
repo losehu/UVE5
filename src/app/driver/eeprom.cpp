@@ -16,7 +16,11 @@
 
 #include "eeprom.h"
 #include "i2c1.h"
+#ifndef ENABLE_OPENCV
 #include <Arduino.h>
+#else
+#include "opencv/Arduino.hpp"
+#endif
 #include <string.h>
 
 // EEPROM 初始化

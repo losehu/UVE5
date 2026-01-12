@@ -7,8 +7,11 @@
  */
 
 #include "adc1.h"
+#ifndef ENABLE_OPENCV
 #include <Arduino.h>
-
+#else
+#include "../opencv/Arduino.hpp"
+#endif
 static bool adc_initialized = false;
 
 // Last read values for CheckEndOfConversion simulation

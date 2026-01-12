@@ -15,8 +15,11 @@
  */
 
 #include "backlight.h"
+#ifndef ENABLE_OPENCV
 #include <Arduino.h>
-#include "driver/gpio.h"
+#else
+#include "../opencv/Arduino.hpp"
+#endif
 #include "../settings.h"
 
 // this is decremented once every 500ms

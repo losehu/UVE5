@@ -31,9 +31,15 @@
 #include "../misc.h"
 
 // ===== ESP32 优化包含 =====
-#include <driver/gpio.h>
+
+
+#ifndef ENABLE_OPENCV
 #include <esp_timer.h>
 #include <xtensa/hal.h>
+#else
+#include "opencv/Arduino.hpp"
+#endif
+
 
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
@@ -184,6 +190,9 @@ static uint16_t BK4819_ReadU16(void) {
 }
 
 uint16_t BK4819_ReadRegister(BK4819_REGISTER_t Register) {
+    #ifdef ENABLE_OPENCV
+    return 0;
+    #endif
     uint16_t Value;
 
     GPIO_SET_HIGH(GPIOC_PIN_BK4819_SCN);

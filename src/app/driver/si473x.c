@@ -1,4 +1,8 @@
+#ifndef ENABLE_OPENCV
 #include <Arduino.h>
+#else
+#include "../opencv/Arduino.hpp"
+#endif
 #include "si473x.h"
 #include "../settings.h"
 #include "../audio.h"

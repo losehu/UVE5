@@ -1,7 +1,9 @@
 // shared_flash.h
 #pragma once
+#ifndef ENABLE_OPENCV
 #include <Arduino.h>
 #include "esp_partition.h"
+
 
 #ifndef SHARED_SUBTYPE
 #define SHARED_SUBTYPE ((esp_partition_subtype_t)0x40) // 自定义 data 子类型
@@ -83,9 +85,21 @@ inline bool shared_write(size_t offset, const void* data, size_t len) {
   free(sector_buf);
   return true;
 }
+void switch_to_factory_and_restart() {
+  const esp_partition_t* part = esp_partition_find_first(
+      ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_FACTORY, "factory");
+  if (part) {
+    esp_ota_set_boot_partition(part);
+    // esp_restart();
+  } else {
+    // 未找到 factory 分区
+  }
+}
 
 
-
+#else
+#include "opencv/Arduino.hpp"
+#endif
   //     // 写：从偏移 10 写入 N=6 字节 "ABCDEF"
   // const char msg[] = "ABCDEF";
   // bool okw = shared_write(10, msg, sizeof(msg)-1);

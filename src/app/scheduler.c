@@ -14,7 +14,11 @@
  *     limitations under the License.
  */
 
+#ifndef ENABLE_OPENCV
 #include <Arduino.h>
+#else
+#include "opencv/Arduino.hpp"
+#endif
 #include "app/chFrScanner.h"
 #ifdef ENABLE_FMRADIO
 	#include "app/fm.h"
@@ -27,8 +31,6 @@
 #include "settings.h"
 
 #include "driver/backlight.h"
-#include "driver/gpio.h"
-#include "driver/gpio.h"
 
 #define DECREMENT(cnt) \
 	do {               \
@@ -44,13 +46,14 @@
 	} while (0)
 
 static volatile uint32_t gGlobalSysTickCounter;
+void SystickHandler(void);
+void SCHEDULER_Init(void);
 
+#ifndef ENABLE_OPENCV
 // ESP32-S3 硬件定时器
 static hw_timer_t *timer = NULL;
 static portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
 
-void SystickHandler(void);
-void SCHEDULER_Init(void);
 
 // 定时器中断回调函数 (在 ISR 上下文中执行)
 void IRAM_ATTR onTimer(void)
@@ -79,6 +82,7 @@ void SCHEDULER_Init(void)
 	// 启动定时器
 	timerAlarmEnable(timer);
 }
+#endif
 
 // we come here every 10ms
 void SystickHandler(void)

@@ -19,8 +19,12 @@
 #include "flashlight.h"
 #endif
 
+#ifndef ENABLE_OPENCV
 #include <Arduino.h>
 #include <esp_system.h>
+#else
+#include "../opencv/Arduino.hpp"
+#endif
 #include <assert.h>
 #include <stdint.h>
 #include <string.h>
@@ -1372,11 +1376,9 @@ void APP_TimeSlice500ms(void) {
         BOARD_ADC_GetBatteryInfo(&gBatteryCurrentVoltage, &gBatteryCurrent);
 
         if (gBatteryCurrent > 500 || gBatteryCalibration[3] < gBatteryCurrentVoltage) {
-#ifdef ENABLE_OVERLAY
-            overlay_FLASH_RebootToBootloader();
-#else
+
             esp_restart();
-#endif
+
         }
 
         return;

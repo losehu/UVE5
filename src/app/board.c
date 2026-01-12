@@ -21,7 +21,6 @@
 #endif
 
 #include "board.h"
-#include "driver/gpio.h"
 
 #include "driver/adc1.h"
 #include "driver/backlight.h"
@@ -35,7 +34,6 @@
 #include "driver/crc.h"
 #include "driver/eeprom.h"
 #include "driver/flash.h"
-#include "driver/gpio.h"
 #include "driver/system.h"
 #include "driver/st7565.h"
 #include "frequencies.h"

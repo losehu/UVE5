@@ -1,25 +1,55 @@
-/* Copyright 2023 Dual Tachyon
- * https://github.com/DualTachyon
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- *     Unless required by applicable law or agreed to in writing, software
- *     distributed under the License is distributed on an "AS IS" BASIS,
- *     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *     See the License for the specific language governing permissions and
- *     limitations under the License.
- */
+#include "opencv_dis.hpp"
+extern "C" {
+#include "../driver/st7565.h"
+}
 
-#include "st7565.h"
-#ifndef ENABLE_OPENCV
-#include <Arduino.h>
-#include <SPI.h>
+#include "Arduino.hpp"
+cv::Mat display;
+char* windowName = "UVE5";
+ bool getScreenSize(int& width, int& height) {
+#if defined(_WIN32)
+  width = GetSystemMetrics(SM_CXSCREEN);
+  height = GetSystemMetrics(SM_CYSCREEN);
+  return width > 0 && height > 0;
+#elif defined(__APPLE__)
+  const auto displayId = CGMainDisplayID();
+  const CGRect bounds = CGDisplayBounds(displayId);
+  width = static_cast<int>(bounds.size.width);
+  height = static_cast<int>(bounds.size.height);
+  return width > 0 && height > 0;
+#elif defined(__linux__)
+  Display* display = XOpenDisplay(nullptr);
+  if (!display) {
+    return false;
+  }
+  const int screen = DefaultScreen(display);
+  width = DisplayWidth(display, screen);
+  height = DisplayHeight(display, screen);
+  XCloseDisplay(display);
+  return width > 0 && height > 0;
+#else
+  (void)width;
+  (void)height;
+  return false;
+#endif
+}
 
-// 全局帧缓冲区
+ void drawTest(cv::Mat& img) {
+  img.setTo(cv::Scalar(20, 20, 20));
+
+  cv::circle(img, cv::Point(16, 16), 2, cv::Scalar(0, 255, 0), cv::FILLED);
+  cv::circle(img, cv::Point(112, 48), 2, cv::Scalar(0, 0, 255), cv::FILLED);
+  cv::circle(img, cv::Point(64, 32), 2, cv::Scalar(255, 255, 0), cv::FILLED);
+
+  cv::line(img, cv::Point(0, 0), cv::Point(127, 63), cv::Scalar(255, 0, 0), 1);
+  cv::line(img, cv::Point(0, 63), cv::Point(127, 0), cv::Scalar(255, 0, 255), 1);
+  cv::line(img, cv::Point(0, 32), cv::Point(127, 32), cv::Scalar(0, 255, 255), 1);
+}
+
+
+
+
+ // 全局帧缓冲区
 uint8_t gStatusLine[LCD_WIDTH];
 uint8_t gFrameBuffer[FRAME_LINES][LCD_WIDTH];
 
@@ -36,8 +66,7 @@ static const uint8_t ST7565_CMD_POWER_CIRCUIT = 0x28;
 static const uint8_t ST7565_CMD_SET_START_LINE = 0x40;
 static const uint8_t ST7565_CMD_DISPLAY_ON_OFF = 0xAE;
 
-// SPI对象
-static SPIClass* spi = nullptr;
+
 
 // 初始化命令序列
 static uint8_t cmds[] = {
@@ -82,7 +111,6 @@ void ST7565_HardwareReset(void) {
 void ST7565_WriteByte(uint8_t value) {
     A0_LOW();  // 命令模式
     CS_LOW();
-    spi->transfer(value);
     CS_HIGH();
 }
 
@@ -90,11 +118,12 @@ void ST7565_WriteByte(uint8_t value) {
 void ST7565_SelectColumnAndLine(uint8_t column, uint8_t line) {
     A0_LOW();  // 命令模式
     CS_LOW();
-    spi->transfer(line + 176);                    // 页地址
-    spi->transfer(((column >> 4) & 0x0F) | 0x10); // 列地址高4位
-    spi->transfer((column >> 0) & 0x0F);          // 列地址低4位
+
     CS_HIGH();
 }
+
+
+
 
 // 绘制一行数据 (内部函数)
 static void DrawLine(uint8_t column, uint8_t line, const uint8_t *lineBuffer, unsigned size_defVal) {
@@ -106,17 +135,51 @@ static void DrawLine(uint8_t column, uint8_t line, const uint8_t *lineBuffer, un
     if (lineBuffer) {
         // 发送缓冲区数据
         for (unsigned i = 0; i < size_defVal; i++) {
-            spi->transfer(lineBuffer[i]);
         }
     } else {
         // 填充固定值 - 这里的 size_defVal 参数实际表示填充值
         for (unsigned i = 0; i < LCD_WIDTH; i++) {
-            spi->transfer((uint8_t)size_defVal);
         }
     }
     
     CS_HIGH();
 }
+void ST7565_Init(void) {
+  const int width = 128;
+  const int height = 64;
+  const int pixelW = 7;
+  const int pixelH = 10;
+
+  cv::Mat img(height, width, CV_8UC3, cv::Scalar(0, 0, 0));
+  drawTest(img);
+
+  cv::namedWindow(windowName, cv::WINDOW_NORMAL);
+
+  int screenW = 0;
+  int screenH = 0;
+  const bool hasScreen = getScreenSize(screenW, screenH);
+  int targetW = width * pixelW;
+  int targetH = height * pixelH;
+  if (hasScreen) {
+    const double maxW = screenW * 0.75;
+    const double maxH = screenH * 0.75;
+    const double scale = std::min(maxW / targetW, maxH / targetH);
+    if (scale < 1.0) {
+      targetW = static_cast<int>(targetW * scale);
+      targetH = static_cast<int>(targetH * scale);
+    }
+  }
+
+  cv::resize(img, display, cv::Size(targetW, targetH), 0, 0, cv::INTER_NEAREST);
+  cv::resizeWindow(windowName, targetW, targetH);
+//   cv::imshow(windowName, display);
+//   cv::waitKey(0);
+//   return 0;
+    ST7565_FillScreen(0x00);
+
+}
+
+
 
 // 绘制指定位置的一行
 void ST7565_DrawLine(const unsigned int column, const unsigned int line, const uint8_t *pBitmap, const unsigned int size) {
@@ -158,60 +221,5 @@ void ST7565_FixInterfGlitch(void) {
     }
 }
 
-// 初始化ST7565
-void ST7565_Init(void) {
-    // 初始化GPIO引脚
-    pinMode(ST7565_PIN_RST, OUTPUT);
-    pinMode(ST7565_PIN_CS, OUTPUT);
-    pinMode(ST7565_PIN_A0, OUTPUT);
-    pinMode(ST7565_PIN_MOSI, OUTPUT);
-    pinMode(ST7565_PIN_CLK, OUTPUT);
-    
-    // 默认状态
-    digitalWrite(ST7565_PIN_CS, HIGH);
-    digitalWrite(ST7565_PIN_A0, LOW);
-    
-    // 初始化SPI
-    spi = new SPIClass(HSPI);
-    spi->begin(ST7565_PIN_CLK, -1, ST7565_PIN_MOSI, ST7565_PIN_CS);
-    spi->setFrequency(4000000);  // 4MHz SPI时钟
-    spi->setDataMode(SPI_MODE0);
-    spi->setBitOrder(MSBFIRST);
-    
-    // 硬件复位
-    ST7565_HardwareReset();
-    
-    // 软件复位
-    ST7565_WriteByte(ST7565_CMD_SOFTWARE_RESET);
-    delay(120);
-    
-    // 发送初始化命令（前8个）
-    for (uint8_t i = 0; i < 8; i++) {
-        ST7565_WriteByte(cmds[i]);
-    }
-    
-    // 电源电路初始化序列
-    ST7565_WriteByte(ST7565_CMD_POWER_CIRCUIT | 0b011);  // VB=0 VR=1 VF=1
-    delay(1);
-    ST7565_WriteByte(ST7565_CMD_POWER_CIRCUIT | 0b110);  // VB=1 VR=1 VF=0
-    delay(1);
-    
-    // 重复4次
-    for (uint8_t i = 0; i < 4; i++) {
-        ST7565_WriteByte(ST7565_CMD_POWER_CIRCUIT | 0b111);  // VB=1 VR=1 VF=1
-    }
-    
-    delay(40);
-    
-    // 最后的设置
-    ST7565_WriteByte(ST7565_CMD_SET_START_LINE | 0);  // 起始行0
-    ST7565_WriteByte(ST7565_CMD_DISPLAY_ON_OFF | 1);  // 打开显示
-    
-    // 清屏
-    ST7565_FillScreen(0x00);
-}
 
 
-#else
-#include "../opencv/Arduino.hpp"
-#endif
