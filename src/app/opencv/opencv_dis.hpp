@@ -1,6 +1,6 @@
+#pragma once
 
-
-#include <opencv2/opencv.hpp>
+#include <GLFW/glfw3.h>
 
 #if defined(_WIN32)
 #include <Windows.h>
@@ -10,9 +10,7 @@
 #include <X11/Xlib.h>
 #endif
 
- bool getScreenSize(int& width, int& height) ;
- void drawTest(cv::Mat& img) ;
-
-
+bool getScreenSize(int& width, int& height);
+int OPENCV_PollKey(void);
 
 

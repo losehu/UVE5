@@ -55,18 +55,24 @@ DEFS := -DENABLE_OPENCV \
 
 FORCE_INC := -include stdio.h 
 
-# ---- OpenCV (auto detect opencv4/opencv via pkg-config) ----
-OPENCV_CFLAGS := $(shell pkg-config --cflags opencv4 2>/dev/null || pkg-config --cflags opencv 2>/dev/null)
-OPENCV_LIBS   := $(shell pkg-config --libs   opencv4 2>/dev/null || pkg-config --libs   opencv 2>/dev/null)
+# ---- GLFW (auto detect via pkg-config; fallback to common Homebrew paths) ----
+GLFW_CFLAGS := $(shell pkg-config --cflags glfw3 2>/dev/null)
+GLFW_LIBS   := $(shell pkg-config --libs   glfw3 2>/dev/null)
+ifeq ($(strip $(GLFW_CFLAGS)),)
+  GLFW_CFLAGS := -I/opt/homebrew/include -I/usr/local/include
+endif
+ifeq ($(strip $(GLFW_LIBS)),)
+  GLFW_LIBS := -L/opt/homebrew/lib -L/usr/local/lib -lglfw
+endif
 
-CFLAGS   := $(CSTD)   $(WARN) $(OPT) $(INCS) $(OPENCV_CFLAGS) $(DEFS) $(FORCE_INC) -MMD -MP
-CXXFLAGS := $(CXXSTD) $(WARN) $(OPT) $(INCS) $(OPENCV_CFLAGS) $(DEFS) $(FORCE_INC) -MMD -MP
+CFLAGS   := $(CSTD)   $(WARN) $(OPT) $(INCS) $(GLFW_CFLAGS) $(DEFS) $(FORCE_INC) -MMD -MP
+CXXFLAGS := $(CXXSTD) $(WARN) $(OPT) $(INCS) $(GLFW_CFLAGS) $(DEFS) $(FORCE_INC) -MMD -MP
 LDFLAGS  :=
-LDLIBS   := $(OPENCV_LIBS)
+LDLIBS   := $(GLFW_LIBS)
 
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
-  LDFLAGS += -framework ApplicationServices
+  LDFLAGS += -framework ApplicationServices -framework OpenGL -framework Cocoa -framework IOKit -framework CoreVideo
 endif
 ifeq ($(UNAME_S),Linux)
   LDLIBS += -lX11

@@ -4,8 +4,138 @@ extern "C" {
 }
 
 #include "Arduino.hpp"
-cv::Mat display;
-char* windowName = "UVE5";
+#include <algorithm>
+#include <atomic>
+#include <vector>
+
+static const char* windowName = "UVE5";
+static GLFWwindow* gWindow = nullptr;
+static int gTargetW = 0;
+static int gTargetH = 0;
+static std::atomic<int> gLastKey{-1};
+static std::atomic<int> gHeldKey{-1};
+static std::vector<uint8_t> gLcdCanvas;
+static std::vector<uint8_t> gLcdRgba;
+static GLuint gTexture = 0;
+static bool gGlReady = false;
+
+extern "C" void OPENCV_ShutdownDisplay(void)
+{
+  if (gTexture != 0) {
+    glDeleteTextures(1, &gTexture);
+    gTexture = 0;
+  }
+  if (gWindow) {
+    glfwDestroyWindow(gWindow);
+    gWindow = nullptr;
+  }
+  if (gGlReady) {
+    glfwTerminate();
+    gGlReady = false;
+  }
+  gLcdCanvas.clear();
+  gLcdRgba.clear();
+  gTargetW = 0;
+  gTargetH = 0;
+  gLastKey.store(-1);
+  gHeldKey.store(-1);
+}
+
+static void FramebufferSizeCallback(GLFWwindow* window, int width, int height)
+{
+  (void)window;
+  if (width <= 0 || height <= 0) {
+    return;
+  }
+  gTargetW = width;
+  gTargetH = height;
+  glViewport(0, 0, width, height);
+  glMatrixMode(GL_PROJECTION);
+  glLoadIdentity();
+  glOrtho(0, width, height, 0, -1, 1);
+  glMatrixMode(GL_MODELVIEW);
+  glLoadIdentity();
+}
+
+static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+  (void)window;
+  (void)scancode;
+  (void)mods;
+  if (action == GLFW_PRESS || action == GLFW_REPEAT) {
+    gHeldKey.store(key);
+    gLastKey.store(key);
+  } else if (action == GLFW_RELEASE) {
+    if (gHeldKey.load() == key) {
+      gHeldKey.store(-1);
+    }
+  }
+}
+
+int OPENCV_PollKey(void)
+{
+  if (gWindow) {
+    glfwPollEvents();
+  }
+  const int held = gHeldKey.load();
+  if (held >= 0) {
+    return held;
+  }
+  return gLastKey.exchange(-1);
+}
+
+static void UpdateDisplay()
+{
+  if (!gWindow || !gGlReady || gLcdCanvas.empty() || gTargetW <= 0 || gTargetH <= 0) {
+    return;
+  }
+  if (glfwWindowShouldClose(gWindow)) {
+    return;
+  }
+
+  const size_t pixelCount = static_cast<size_t>(LCD_WIDTH) * static_cast<size_t>(LCD_HEIGHT);
+  if (gLcdRgba.size() != pixelCount * 4) {
+    gLcdRgba.resize(pixelCount * 4, 0);
+  }
+
+  for (size_t i = 0; i < pixelCount; ++i) {
+    const uint8_t v = gLcdCanvas[i];
+    const size_t base = i * 4;
+    if (v == 0) {
+      gLcdRgba[base + 0] = 0;
+      gLcdRgba[base + 1] = 0;
+      gLcdRgba[base + 2] = 0;
+      gLcdRgba[base + 3] = 255;
+    } else {
+      gLcdRgba[base + 0] = 251;
+      gLcdRgba[base + 1] = 229;
+      gLcdRgba[base + 2] = 122;
+      gLcdRgba[base + 3] = 255;
+    }
+  }
+
+  glBindTexture(GL_TEXTURE_2D, gTexture);
+  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, LCD_WIDTH, LCD_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE,
+                  gLcdRgba.data());
+
+  glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT);
+  glMatrixMode(GL_MODELVIEW);
+  glLoadIdentity();
+  glEnable(GL_TEXTURE_2D);
+  glBegin(GL_QUADS);
+  glTexCoord2f(0.0f, 0.0f);
+  glVertex2f(0.0f, 0.0f);
+  glTexCoord2f(1.0f, 0.0f);
+  glVertex2f(static_cast<float>(gTargetW), 0.0f);
+  glTexCoord2f(1.0f, 1.0f);
+  glVertex2f(static_cast<float>(gTargetW), static_cast<float>(gTargetH));
+  glTexCoord2f(0.0f, 1.0f);
+  glVertex2f(0.0f, static_cast<float>(gTargetH));
+  glEnd();
+
+  glfwSwapBuffers(gWindow);
+}
  bool getScreenSize(int& width, int& height) {
 #if defined(_WIN32)
   width = GetSystemMetrics(SM_CXSCREEN);
@@ -32,18 +162,6 @@ char* windowName = "UVE5";
   (void)height;
   return false;
 #endif
-}
-
- void drawTest(cv::Mat& img) {
-  img.setTo(cv::Scalar(20, 20, 20));
-
-  cv::circle(img, cv::Point(16, 16), 2, cv::Scalar(0, 255, 0), cv::FILLED);
-  cv::circle(img, cv::Point(112, 48), 2, cv::Scalar(0, 0, 255), cv::FILLED);
-  cv::circle(img, cv::Point(64, 32), 2, cv::Scalar(255, 255, 0), cv::FILLED);
-
-  cv::line(img, cv::Point(0, 0), cv::Point(127, 63), cv::Scalar(255, 0, 0), 1);
-  cv::line(img, cv::Point(0, 63), cv::Point(127, 0), cv::Scalar(255, 0, 255), 1);
-  cv::line(img, cv::Point(0, 32), cv::Point(127, 32), cv::Scalar(0, 255, 255), 1);
 }
 
 
@@ -132,14 +250,29 @@ static void DrawLine(uint8_t column, uint8_t line, const uint8_t *lineBuffer, un
     A0_HIGH();  // 数据模式
     CS_LOW();
     
-    if (lineBuffer) {
-        // 发送缓冲区数据
-        for (unsigned i = 0; i < size_defVal; i++) {
+    if (!gLcdCanvas.empty()) {
+        if (line < 8 && column < LCD_WIDTH) {
+            unsigned count = lineBuffer ? size_defVal : LCD_WIDTH;
+            if (count > LCD_WIDTH - column) {
+                count = LCD_WIDTH - column;
+            }
+            const uint8_t fillByte = lineBuffer ? 0 : static_cast<uint8_t>(size_defVal);
+
+            for (unsigned i = 0; i < count; i++) {
+                const uint8_t byte = lineBuffer ? lineBuffer[i] : fillByte;
+                const unsigned x = column + i;
+                for (unsigned bit = 0; bit < 8; bit++) {
+                    const unsigned y = static_cast<unsigned>(line) * 8 + bit;
+                    if (y < LCD_HEIGHT && x < LCD_WIDTH) {
+                        const size_t idx = static_cast<size_t>(y) * LCD_WIDTH + x;
+                        if (idx < gLcdCanvas.size()) {
+                            gLcdCanvas[idx] = (byte & (1u << bit)) ? 0 : 255;
+                        }
+                    }
+                }
+            }
         }
-    } else {
-        // 填充固定值 - 这里的 size_defVal 参数实际表示填充值
-        for (unsigned i = 0; i < LCD_WIDTH; i++) {
-        }
+        UpdateDisplay();
     }
     
     CS_HIGH();
@@ -150,10 +283,13 @@ void ST7565_Init(void) {
   const int pixelW = 7;
   const int pixelH = 10;
 
-  cv::Mat img(height, width, CV_8UC3, cv::Scalar(0, 0, 0));
-  drawTest(img);
-
-  cv::namedWindow(windowName, cv::WINDOW_NORMAL);
+  if (!glfwInit()) {
+    return;
+  }
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_ANY_PROFILE);
+  glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_FALSE);
 
   int screenW = 0;
   int screenH = 0;
@@ -169,13 +305,39 @@ void ST7565_Init(void) {
       targetH = static_cast<int>(targetH * scale);
     }
   }
+  gWindow = glfwCreateWindow(targetW, targetH, windowName, nullptr, nullptr);
+  if (!gWindow) {
+    glfwTerminate();
+    return;
+  }
+  glfwMakeContextCurrent(gWindow);
+  glfwSwapInterval(1);
+  glfwSetKeyCallback(gWindow, KeyCallback);
+  glfwSetFramebufferSizeCallback(gWindow, FramebufferSizeCallback);
 
-  cv::resize(img, display, cv::Size(targetW, targetH), 0, 0, cv::INTER_NEAREST);
-  cv::resizeWindow(windowName, targetW, targetH);
-//   cv::imshow(windowName, display);
-//   cv::waitKey(0);
-//   return 0;
-    ST7565_FillScreen(0x00);
+  int fbW = 0;
+  int fbH = 0;
+  glfwGetFramebufferSize(gWindow, &fbW, &fbH);
+  FramebufferSizeCallback(gWindow, fbW, fbH);
+  glDisable(GL_DEPTH_TEST);
+  glEnable(GL_TEXTURE_2D);
+  glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+  glGenTextures(1, &gTexture);
+  glBindTexture(GL_TEXTURE_2D, gTexture);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+  gLcdCanvas.assign(static_cast<size_t>(LCD_WIDTH) * LCD_HEIGHT, 0);
+  gLcdRgba.assign(static_cast<size_t>(LCD_WIDTH) * LCD_HEIGHT * 4, 0);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, LCD_WIDTH, LCD_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+               gLcdRgba.data());
+
+  gGlReady = true;
+  ST7565_BlitFullScreen(); // 初始化时清屏
+  UpdateDisplay();
 
 }
 
@@ -184,6 +346,7 @@ void ST7565_Init(void) {
 // 绘制指定位置的一行
 void ST7565_DrawLine(const unsigned int column, const unsigned int line, const uint8_t *pBitmap, const unsigned int size) {
     DrawLine(column, line, pBitmap, size);
+    
 }
 
 // 刷新整个屏幕
@@ -220,6 +383,3 @@ void ST7565_FixInterfGlitch(void) {
         ST7565_WriteByte(cmds[i]);
     }
 }
-
-
-

@@ -15,6 +15,7 @@
 #include <esp_rom_sys.h>
 #else
 #include "opencv/Arduino.hpp"
+#include "opencv/opencv_dis.hpp"
 #endif
 
 
@@ -23,6 +24,66 @@ KEY_Code_t gKeyReading0 = KEY_INVALID;
 KEY_Code_t gKeyReading1 = KEY_INVALID;
 uint16_t gDebounceCounter = 0;
 bool gWasFKeyPressed = false;
+
+#ifdef ENABLE_OPENCV
+static KEY_Code_t MapOpenCVKey(int key)
+{
+    if (key < 0) {
+        return KEY_INVALID;
+    }
+
+    if (key >= GLFW_KEY_0 && key <= GLFW_KEY_9) {
+        return static_cast<KEY_Code_t>(key - GLFW_KEY_0);
+    }
+    if (key >= GLFW_KEY_KP_0 && key <= GLFW_KEY_KP_9) {
+        return static_cast<KEY_Code_t>(key - GLFW_KEY_KP_0);
+    }
+    if (key == GLFW_KEY_LEFT_BRACKET) {
+        return KEY_SIDE1;
+    }
+    if (key == GLFW_KEY_RIGHT_BRACKET) {
+        return KEY_SIDE2;
+    }
+    if (key == GLFW_KEY_ESCAPE || key == GLFW_KEY_BACKSPACE || key == GLFW_KEY_DELETE) {
+        return KEY_EXIT;
+    }
+    if (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER) {
+        return KEY_MENU;
+    }
+    if (key == GLFW_KEY_SPACE) {
+        return KEY_PTT;
+    }
+    if (key == GLFW_KEY_MINUS) {
+        return KEY_F;
+    }
+    if (key == GLFW_KEY_EQUAL) {
+        return KEY_STAR;
+    }
+    if (key == GLFW_KEY_UP) {
+        return KEY_UP;
+    }
+    if (key == GLFW_KEY_DOWN) {
+        return KEY_DOWN;
+    }
+
+    return KEY_INVALID;
+}
+
+void KEYBOARD_Init(void)
+{
+}
+
+KEY_Code_t KEYBOARD_Poll(void)
+{
+    KEY_Code_t get_key=MapOpenCVKey(OPENCV_PollKey());
+    return get_key;
+}
+
+KEY_Code_t GetKey(void)
+{
+    return KEYBOARD_Poll();
+}
+#else
 
 // Keyboard Matrix Configuration
 static const struct {
@@ -219,3 +280,4 @@ KEY_Code_t GetKey(void) {
     
     return btn;
 }
+#endif

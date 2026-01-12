@@ -1,6 +1,9 @@
 #pragma once
 #include "stdint.h"
 #include "stdbool.h"
+#ifdef __cplusplus
+#include <iostream>
+#endif
 #include "HardwareSerial.h"
 #if (CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3)
 #define NUM_OUPUT_PINS  46
@@ -166,9 +169,15 @@ void uartWrite(uart_t* uart, uint8_t c);
 uint32_t uartAvailable(uart_t* uart);
 uint8_t uartRead(uart_t* uart);
 esp_err_t gpio_set_level(gpio_num_t gpio_num, uint32_t level);
+void OPENCV_ShutdownDisplay(void);
+void OPENCV_SetRestartArgs(int argc, char **argv);
 
 #ifdef __cplusplus
 }
+#endif
+
+#ifdef __cplusplus
+struct EspRestartException {};
 #endif
 
 #ifdef __cplusplus
@@ -278,6 +287,7 @@ public:
     }
     inline size_t println(char *a)
     {
+        std::cout<<a<<std::endl;
         return 0;
     }
     operator bool() const;

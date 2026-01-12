@@ -1,27 +1,33 @@
 #include <chrono>
 #include <thread>
+#include "Arduino.hpp"
 
 extern "C" void SystickHandler(void);
 
 void setup(void);
 void loop(void);
 
-int main()
+int main(int argc, char **argv)
 {
-    setup();
+    OPENCV_SetRestartArgs(argc, argv);
 
     std::thread([] {
-        auto next = std::chrono::steady_clock::now();
+        using namespace std::chrono;
+        auto next = steady_clock::now();
         while (true) {
-            next += std::chrono::milliseconds(10);
-            SystickHandler();
+            next += 10ms;
             std::this_thread::sleep_until(next);
+            SystickHandler();
+            // 若严重落后，可选择 next = steady_clock::now(); 防止疯狂补课
         }
     }).detach();
 
-    while (true) {
-        loop();
+    for (;;) {
+        try {
+            setup();
+            loop();
+            return 0;
+        } catch (const EspRestartException &) {
+        }
     }
-
-    return 0;
 }

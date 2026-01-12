@@ -1,5 +1,6 @@
 #include "Arduino.hpp"
 #include "../scheduler.h"
+#include <unistd.h>
 
 void digitalWrite(uint8_t pin, uint8_t val)
 {
@@ -7,8 +8,22 @@ void digitalWrite(uint8_t pin, uint8_t val)
     (void)val;
 }
 
+static int gRestartArgc = 0;
+static char **gRestartArgv = nullptr;
+
+void OPENCV_SetRestartArgs(int argc, char **argv)
+{
+    gRestartArgc = argc;
+    gRestartArgv = argv;
+}
+
 void esp_restart()
 {
+    OPENCV_ShutdownDisplay();
+    if (gRestartArgc > 0 && gRestartArgv && gRestartArgv[0]) {
+        execv(gRestartArgv[0], gRestartArgv);
+    }
+    throw EspRestartException();
 }
 
 void pinMode(uint8_t pin, uint8_t mode)
