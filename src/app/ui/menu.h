@@ -27,11 +27,7 @@
 typedef struct {
     VOICE_ID_t voice_id;
     uint8_t menu_id;
-#if ENABLE_CHINESE_FULL == 0 || defined(ENABLE_ENGLISH)
-    const char name[7]; // 使用指针而不是固定长度数组
-
-
-#endif
+    const char *name;
 } t_menu_item;
 
 enum {

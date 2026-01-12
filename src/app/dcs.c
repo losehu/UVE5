@@ -32,7 +32,6 @@ const uint16_t CTCSS_Options[50] = {
 };
 #else
 //CTCSS Hz * 10
-#if ENABLE_CHINESE_FULL == 0 || defined(ENABLE_ENGLISH)
 const uint16_t CTCSS_Options[50] = {
         670, 693, 719, 744, 770, 797, 825, 854, 885, 915,
         948, 974, 1000, 1035, 1072, 1109, 1148, 1188, 1230, 1273,
@@ -41,9 +40,7 @@ const uint16_t CTCSS_Options[50] = {
         2035, 2065, 2107, 2181, 2257, 2291, 2336, 2418, 2503, 2541
 };
 #endif
-#endif
 
-#if ENABLE_CHINESE_FULL == 0|| defined(ENABLE_ENGLISH)
 
 const uint16_t DCS_Options[104] = {
         0x0013, 0x0015, 0x0016, 0x0019, 0x001A, 0x001E, 0x0023, 0x0027,
@@ -60,7 +57,6 @@ const uint16_t DCS_Options[104] = {
         0x018A, 0x0194, 0x0197, 0x0199, 0x019A, 0x01AC, 0x01B2, 0x01B4,
         0x01C3, 0x01CA, 0x01D3, 0x01D9, 0x01DA, 0x01DC, 0x01E3, 0x01EC,
 };
-#endif
 
 static uint32_t DCS_CalculateGolay(uint32_t CodeWord) {
     unsigned int i;
@@ -75,19 +71,7 @@ static uint32_t DCS_CalculateGolay(uint32_t CodeWord) {
 
 uint32_t DCS_GetGolayCodeWord(DCS_CodeType_t CodeType, uint8_t Option) {
 
-#if ENABLE_CHINESE_FULL == 0 || defined(ENABLE_ENGLISH)
     uint32_t Code = DCS_CalculateGolay(DCS_Options[Option] + 0x800U);
-
-#else
-    uint8_t read_tmp[2];
-EEPROM_ReadBuffer(0x02C64+(Option)*2, read_tmp, 2);
-uint16_t DCS_Options_read=read_tmp[0]|(read_tmp[1]<<8);
-uint32_t Code = DCS_CalculateGolay(DCS_Options_read + 0x800U);
-
-
-#endif
-
-//	uint32_t Code = DCS_CalculateGolay(DCS_Options[Option] + 0x800U);
     if (CodeType == CODE_TYPE_REVERSE_DIGITAL)
         Code ^= 0x7FFFFF;
     return Code;
@@ -103,17 +87,7 @@ uint8_t DCS_GetCdcssCode(uint32_t Code) {
 
 
             for (j = 0; j < 104; j++) {
-#if ENABLE_CHINESE_FULL == 0 || defined(ENABLE_ENGLISH)
                 if (DCS_Options[j] == (Code & 0x1FF))
-
-#else
-                    uint8_t read_tmp[2];
-        EEPROM_ReadBuffer(0x02C64+(j)*2, read_tmp, 2);
-        uint16_t DCS_Options_read=read_tmp[0]|(read_tmp[1]<<8);
-            if (DCS_Options_read == (Code & 0x1FF))
-
-
-#endif
                     if (DCS_GetGolayCodeWord(2, j) == Code)
                         return j;
             }
@@ -135,19 +109,9 @@ uint8_t DCS_GetCtcssCode(int Code) {
 
     for (i = 0; i < 50; i++) {
 
-#if ENABLE_CHINESE_FULL == 0 || defined(ENABLE_ENGLISH)
         int Delta = Code - CTCSS_Options[i];
         if (Delta < 0)
             Delta = -(Code - CTCSS_Options[i]);
-#else
-        uint8_t read_tmp[2];
-        EEPROM_ReadBuffer(0x02C00+i*2, read_tmp, 2);
-        uint16_t CTCSS_Options_read=read_tmp[0]|(read_tmp[1]<<8);
-
-        int Delta = Code - CTCSS_Options_read;
-        if (Delta < 0)
-            Delta = -(Code - CTCSS_Options_read);
-#endif
         if (Smallest > Delta) {
             Smallest = Delta;
             Result = i;

@@ -28,13 +28,13 @@
 #include "../frequencies.h"
 #include "../helper/battery.h"
 #include "../misc.h"
+#include "../pinyin_blob.h"
 #include "../settings.h"
 #include "helper.h"
 #include "inputbox.h"
 #include "menu.h"
 #include "ui.h"
 #include "../chinese.h"
-
 void insertNewline(char a[], int index, int len) {
 
     if (index < 0 || index >= len || len >= 63) {
@@ -738,29 +738,10 @@ void UI_DisplayMenu(void) {
 #endif
 
 
-#if ENABLE_CHINESE_FULL == 0 || defined(ENABLE_ENGLISH)
             else if (gSubMenuSelection < 105)
                 sprintf(String, "D%03oN", DCS_Options[gSubMenuSelection - 1]);
             else
                 sprintf(String, "D%03oI", DCS_Options[gSubMenuSelection - 105]);
-#else
-
-            else if (gSubMenuSelection < 105)
-                {
-                  uint8_t read_tmp[2];
-         EEPROM_ReadBuffer(0x02C64+(gSubMenuSelection - 1)*2, read_tmp, 2);
-         uint16_t DCS_Options_read=read_tmp[0]|(read_tmp[1]<<8);
-             sprintf(String, "D%03oN", DCS_Options_read);
-             }
-         else{
-               uint8_t read_tmp[2];
-         EEPROM_ReadBuffer(0x02C64+(gSubMenuSelection - 105)*2, read_tmp, 2);
-         uint16_t DCS_Options_read=read_tmp[0]|(read_tmp[1]<<8);
-             sprintf(String, "D%03oI",DCS_Options_read);
-             }
-
-#endif
-
             break;
 
         case MENU_R_CTCS:
@@ -777,16 +758,9 @@ void UI_DisplayMenu(void) {
 #endif
 
             else {
-#if ENABLE_CHINESE_FULL == 0 || defined(ENABLE_ENGLISH)
                 sprintf(String, "%u.%uHz", CTCSS_Options[gSubMenuSelection - 1] / 10,
                         CTCSS_Options[gSubMenuSelection - 1] % 10);
-#else
-                uint8_t read_tmp[2];
-            EEPROM_ReadBuffer(0x02C00+(gSubMenuSelection - 1)*2, read_tmp, 2);
-            uint16_t CTCSS_Options_read=read_tmp[0]|(read_tmp[1]<<8);
-            sprintf(String, "%u.%uHz", CTCSS_Options_read / 10,CTCSS_Options_read % 10);
 
-#endif
             }
 
             break;
@@ -1070,7 +1044,7 @@ void UI_DisplayMenu(void) {
 //                                    show_uint32(PINYIN_NOW_NUM,1);
 //                                    show_uint32(HAVE_PINYIN,1);
                                     for (int j = 0; j < HAVE_PINYIN; ++j) {
-                                        EEPROM_ReadBuffer(
+                                        PINYIN_Read(
                                                 PINYIN_NOW_INDEX * 128 + 0X20000 + 16 + num * 3 * 16 +
                                                 j * 16, tmp, 6);
                                         memcpy(&String[6 * j], tmp, 6);//0 1 2 3 4 5
@@ -1099,7 +1073,7 @@ void UI_DisplayMenu(void) {
 
                                     uint8_t SHOW_NUM =
                                             CHN_NOW_NUM - CHN_NOW_PAGE * 6 > 6 ? 6 : CHN_NOW_NUM - CHN_NOW_PAGE * 6;
-                                    EEPROM_ReadBuffer(CHN_NOW_ADD + CHN_NOW_PAGE * 6 * 2, tmp, SHOW_NUM * 2);
+                                    PINYIN_Read(CHN_NOW_ADD + CHN_NOW_PAGE * 6 * 2, tmp, SHOW_NUM * 2);
 //                                    show_uint32(PINYIN_NOW_INDEX * 128 + 0X20000 + 16 + PINYIN_NUM_SELECT * 16 + 6, 5);
                                     for (int j = 0; j < SHOW_NUM; ++j) {
                                         String[j * 3] = '0' + j + 1;
@@ -1542,16 +1516,8 @@ void UI_ShowChineseMenu() {
     uint8_t cnt_menu = 0;
 
 
-#if ENABLE_CHINESE_FULL == 4 && !defined(ENABLE_ENGLISH)
-    uint8_t name[15];
-    name[15] = 0;
-    EEPROM_ReadBuffer(0x028B0 + gMenuCursor * 14, name, 14);
-    for (cnt_menu = 0; cnt_menu < 7 && name[cnt_menu]!= 0; cnt_menu++) {
-        if (is_chn(/*MenuList[gMenuCursor].name[cnt_menu]*/name[cnt_menu]) != 255)//中文
-#else
     for (cnt_menu = 0; cnt_menu < 7 && MenuList[gMenuCursor].name[cnt_menu] != 0; cnt_menu++) {
         if (is_chn(MenuList[gMenuCursor].name[cnt_menu]) != 255)//中文
-#endif
         {
             size_menu += 12;
 #if ENABLE_CHINESE_FULL != 0
@@ -1565,14 +1531,7 @@ void UI_ShowChineseMenu() {
 
     show_move_flag = 1;
 
-#if ENABLE_CHINESE_FULL == 4
-
-    UI_PrintStringSmall((const char *)name, size_menu < 48 ? (48 - size_menu) / 2 : 0, 0, 0);
-#else
-
     UI_PrintStringSmall(MenuList[gMenuCursor].name, size_menu < 48 ? (48 - size_menu) / 2 : 0, 0, 0);
-
-#endif
 
 }
 #endif
@@ -1673,7 +1632,7 @@ uint8_t sear_pinyin_code(uint32_t target, uint8_t *pinyin_num, uint8_t *found)//
     while (left <= right) {
         int mid = left + (right - left) / 2;
         uint8_t tmp[5];
-        EEPROM_ReadBuffer(mid * 128 + 0x20000, tmp, 5);
+        PINYIN_Read(mid * 128 + 0x20000, tmp, 5);
         uint32_t mid_num = tmp[0] | tmp[1] << 8 | tmp[2] << 16 | tmp[3] << 24;
         *pinyin_num = tmp[4];
         if (mid_num == target) {
@@ -1689,7 +1648,7 @@ uint8_t sear_pinyin_code(uint32_t target, uint8_t *pinyin_num, uint8_t *found)//
     // 找不到目标值，返回比目标值大一个的值
     if (left <= 213) {
         uint8_t tmp[5];
-        EEPROM_ReadBuffer(left * 128 + 0x20000, tmp, 5);
+        PINYIN_Read(left * 128 + 0x20000, tmp, 5);
         uint32_t left_num = tmp[0] | tmp[1] << 8 | tmp[2] << 16 | tmp[3] << 24;
 
 

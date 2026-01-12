@@ -657,14 +657,7 @@ void RADIO_SetupRegisters(bool switchToForeground) {
 
                 case CODE_TYPE_CONTINUOUS_TONE:
 
-#if ENABLE_CHINESE_FULL == 0 ||defined(ENABLE_ENGLISH)
                     BK4819_SetCTCSSFrequency(CTCSS_Options[Code]);
-#else
-                    EEPROM_ReadBuffer(0x02C00+(Code)*2, read_tmp, 2);
-                    uint16_t CTCSS_Options_read=read_tmp[0]|(read_tmp[1]<<8);
-                                BK4819_SetCTCSSFrequency(CTCSS_Options_read);
-
-#endif
                     //#ifndef ENABLE_CTCSS_TAIL_PHASE_SHIFT
                     BK4819_SetTailDetection(550);        // QS's 55Hz tone method
                     //#else
@@ -851,16 +844,7 @@ void RADIO_SetTxParameters(void) {
             break;
 
         case CODE_TYPE_CONTINUOUS_TONE:
-#if ENABLE_CHINESE_FULL == 0||defined(ENABLE_ENGLISH)
             BK4819_SetCTCSSFrequency(CTCSS_Options[gCurrentVfo->pTX->Code]);
-#else
-
-            EEPROM_ReadBuffer(0x02C00+(gCurrentVfo->pTX->Code)*2, read_tmp, 2);
-            uint16_t CTCSS_Options_read=read_tmp[0]|(read_tmp[1]<<8);
-                BK4819_SetCTCSSFrequency(CTCSS_Options_read);
-
-#endif
-
             break;
 
         case CODE_TYPE_DIGITAL:

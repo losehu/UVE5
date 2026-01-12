@@ -23,7 +23,7 @@
 #include "inputbox.h"
 #include "../misc.h"
 #include "../chinese.h"
-#include "../driver/eeprom.h"
+#include "../font_blob.h"
 
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(arr) (sizeof(arr)/sizeof((arr)[0]))
@@ -182,7 +182,7 @@ void UI_PrintStringSmall(const char *pString, uint8_t Start, uint8_t End, uint8_
 
 #if ENABLE_CHINESE_FULL != 0
 
-            true_char[char_num] = (pString[j] << 8) | pString[j + 1];
+            true_char[char_num] = ((uint16_t)(uint8_t)pString[j] << 8) |(uint16_t)(uint8_t)pString[j + 1];
             j++;
 #else
             true_char[char_num] = chn_judge;
@@ -195,8 +195,14 @@ void UI_PrintStringSmall(const char *pString, uint8_t Start, uint8_t End, uint8_
     }
     if (End > Start)
         Start += (((End - Start) - (sum_pixel)) + 1) / 2;
+    if (Line >= FRAME_LINES) {
+        return;
+    }
+    if (Start >= LCD_WIDTH) {
+        return;
+    }
     uint8_t *pFb = gFrameBuffer[Line] + Start;
-    uint8_t *pFb1 = gFrameBuffer[Line + 1] + Start;
+    uint8_t *pFb1 = (Line + 1 < FRAME_LINES) ? (gFrameBuffer[Line + 1] + Start) : NULL;
     uint8_t now_pixel = 0;
     for (unsigned short i = 0; i < char_num; i++) {
         if (cn_flag[i] == 0) {
@@ -213,14 +219,19 @@ void UI_PrintStringSmall(const char *pString, uint8_t Start, uint8_t End, uint8_
                                         >> 5;//|(0xFB& *(pFb1+ now_pixel + 1+j-6));//11100000
                         }
                         memcpy(pFb + now_pixel + 1, &gFontSmall_More[0], 6);
-                        memcpy(pFb1 + now_pixel + 1, &gFontSmall_More[6], 6);
+                        if (pFb1) {
+                            memcpy(pFb1 + now_pixel + 1, &gFontSmall_More[6], 6);
+                        }
                     } else
                         memcpy(pFb + now_pixel + 1, &gFontSmall[index], 6);
                 }
 #else
                 if (index < 94) {
+                    if ((uint16_t)Start + now_pixel + 1 + 6 > LCD_WIDTH) {
+                        break;
+                    }
                     uint8_t read_gFontSmall[6];
-                    EEPROM_ReadBuffer(0x0267C + index * 6, read_gFontSmall, 6);
+                    FONT_Read(0x0267C + index * 6-0x02480, read_gFontSmall, 6);
                     if (flag_move) {
                         uint8_t gFontSmall_More[12] = {0};
 
@@ -230,9 +241,11 @@ void UI_PrintStringSmall(const char *pString, uint8_t Start, uint8_t End, uint8_
                                         >> 5;//|(0xFB& *(pFb1+ now_pixel + 1+j-6));//11100000
                         }
                         memcpy(pFb + now_pixel + 1, &gFontSmall_More[0], 6);
-                        memcpy(pFb1 + now_pixel + 1, &gFontSmall_More[6], 6);
+                        if (pFb1) {
+                            memcpy(pFb1 + now_pixel + 1, &gFontSmall_More[6], 6);
+                        }
                     } else
-                        memcpy(pFb + now_pixel + 1, &read_gFontSmall, 6);
+                        memcpy(pFb + now_pixel + 1, read_gFontSmall, 6);
                 }
 
 #endif
@@ -247,9 +260,12 @@ void UI_PrintStringSmall(const char *pString, uint8_t Start, uint8_t End, uint8_
                     true_char[i] < 0XD8A1 ? ((true_char[i] - 0xB0A0) >> 8) * 94 + ((true_char[i] - 0xB0A0) & 0xff) - 1 :
                     ((true_char[i] - 0xB0A0) >> 8) * 94 + ((true_char[i] - 0xB0A0) & 0xFF) - 6;
             uint8_t tmp[17] = {0};
+            if ((uint16_t)Start + now_pixel + 1 + CHN_FONT_WIDTH > LCD_WIDTH) {
+                break;
+            }
             unsigned int local = (CHN_FONT_HIGH * CHN_FONT_WIDTH * true_char[i]) >> 3;
             unsigned int local_bit = (CHN_FONT_HIGH * CHN_FONT_WIDTH * true_char[i]) & 7;
-            EEPROM_ReadBuffer(local + 0x02E00, tmp, 17);
+            FONT_Read(local + 0x02E00-0x02480, tmp, 17);
             local = 0;
             for (unsigned char k = 0; k < CHN_FONT_WIDTH * 2; ++k) {
                 unsigned char j_end = 8;
@@ -258,9 +274,11 @@ void UI_PrintStringSmall(const char *pString, uint8_t Start, uint8_t End, uint8_
                 for (unsigned char j = 0; j < j_end; ++j) {
                     if (IS_BIT_SET(tmp[local], local_bit))
 //                        set_bit(&gFontChinese[k], j, 1);
-                        if (k < CHN_FONT_WIDTH) set_bit(pFb + now_pixel + 1 + k, j);
-
-                        else set_bit(pFb1 + now_pixel + 1 + k - CHN_FONT_WIDTH, j);
+                        if (k < CHN_FONT_WIDTH) {
+                            set_bit(pFb + now_pixel + 1 + k, j);
+                        } else if (pFb1) {
+                            set_bit(pFb1 + now_pixel + 1 + k - CHN_FONT_WIDTH, j);
+                        }
 
                     local_bit++;
                     if (local_bit == 8) {
@@ -313,7 +331,7 @@ void UI_PrintStringSmallBuffer(const char *pString, uint8_t *buffer) {
 #if ENABLE_CHINESE_FULL == 4
             if (index < 94) {
                 uint8_t read_gFontSmall[6];
-                EEPROM_ReadBuffer(0x267C + index * 6, read_gFontSmall, 6);
+                FONT_Read(0x267C + index * 6-0x02480, read_gFontSmall, 6);
                 memcpy(buffer + (i * (char_width + 1)) + 1, &read_gFontSmall, char_width);
             }
 #else
@@ -340,7 +358,7 @@ void UI_DisplayFrequency(const char *string, uint8_t X, uint8_t Y, bool center) 
             if (c >= '0' && c <= '9' + 1) {
 #if ENABLE_CHINESE_FULL == 4
                 uint8_t read_gFontBigDigits[20];
-                EEPROM_ReadBuffer(0x02480 + 20 * (c - '0'), read_gFontBigDigits, 20);
+                FONT_Read(0x02480 + 20 * (c - '0')-0x02480, read_gFontBigDigits, 20);
 
                 memcpy(pFb0 + 2, read_gFontBigDigits, char_width - 3);
                 memcpy(pFb1 + 2, read_gFontBigDigits + char_width - 3, char_width - 3);
@@ -438,7 +456,7 @@ void GUI_DisplaySmallest(const char *pString, uint8_t x, uint8_t y,
         c -= 0x20;
 #if ENABLE_CHINESE_FULL != 0
         uint8_t read_gFont3x5[3];
-        EEPROM_ReadBuffer(0x0255C + c * 3, read_gFont3x5, 3);
+        FONT_Read(0x0255C + c * 3-0x02480, read_gFont3x5, 3);
         for (int i = 0; i < 3; ++i) {
             pixels = read_gFont3x5[i];
 #else

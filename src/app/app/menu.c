@@ -37,6 +37,7 @@
 #include "../frequencies.h"
 #include "../helper/battery.h"
 #include "../misc.h"
+#include "../pinyin_blob.h"
 #include "../settings.h"
 
 #if defined(ENABLE_OVERLAY)
@@ -586,7 +587,7 @@ void MENU_AcceptSetting(void) {
                 edit[i] = 0;
             }
 
-            SETTINGS_SaveChannelName(gSubMenuSelection, edit);
+            SETTINGS_SaveChannelNameRaw(gSubMenuSelection, (const uint8_t *)edit, MAX_EDIT_INDEX);
             return;
 
         case MENU_SAVE:
@@ -1311,7 +1312,7 @@ static void MENU_Key_0_to_9(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
                                         CHN_NOW_NUM - CHN_NOW_PAGE * 6 > 6 ? 6 : CHN_NOW_NUM - CHN_NOW_PAGE * 6;
                                 if (Key > 0 && Key <= SHOW_NUM) {
                                     if (edit_chn[edit_index + 1] == 1)edit[edit_index + 2] = '_';
-                                    EEPROM_ReadBuffer(CHN_NOW_ADD + CHN_NOW_PAGE * 6 * 2 + 2 * (Key - 1), &edit[edit_index], 2);
+                                    PINYIN_Read(CHN_NOW_ADD + CHN_NOW_PAGE * 6 * 2 + 2 * (Key - 1), &edit[edit_index], 2);
                                     edit_index += 2;
                                     PINYIN_NUM_SELECT = 0;
                                     PINYIN_CODE = 0;
@@ -1612,7 +1613,7 @@ void UPDATE_CHN()
 {
     uint8_t tmp[5];
 
-    EEPROM_ReadBuffer(PINYIN_NOW_INDEX * 128 + 0X20000 + 16 + PINYIN_NUM_SELECT * 16 + 6, tmp, 5);
+    PINYIN_Read(PINYIN_NOW_INDEX * 128 + 0X20000 + 16 + PINYIN_NUM_SELECT * 16 + 6, tmp, 5);
     CHN_NOW_ADD = tmp[1] | tmp[2] << 8 | tmp[3] << 16 | tmp[4] << 24;
     CHN_NOW_NUM = tmp[0];
     CHN_NOW_PAGE = 0;

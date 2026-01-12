@@ -391,12 +391,18 @@ void SETTINGS_FetchChannelName(char *s, const int channel)
 #if ENABLE_CHINESE_FULL==4 && !defined(ENABLE_ENGLISH)
 
     EEPROM_ReadBuffer(0x0F50 + (channel * 16), s, 16);
+    s[15] = 0;
     int i;
-    for (i = 0; i < 16; i++)
-        if (!((s[i] >= 32 && s[i] <= 127)||(
-        s[i]>=0xb0&&s[i]<=0xf7&&i!=15&&s[i+1]!=0)
-        ))break;                // invalid char
-            else if(s[i]>=0xb0&&s[i]<=0xf7&&i!=15&&s[i+1]!=0) i++;
+    for (i = 0; i < 16; i++) {
+        if ((uint8_t)s[i] >= 32 && (uint8_t)s[i] <= 127) {
+            continue;
+        }
+        if ((uint8_t)s[i] >= 0x80 && i != 15 && s[i + 1] != 0) {
+            i++;
+            continue;
+        }
+        break;
+    }
 
 #else
     EEPROM_ReadBuffer(0x0F50 + (channel * 16), s, 10);
@@ -408,6 +414,9 @@ void SETTINGS_FetchChannelName(char *s, const int channel)
 #endif
 
 
+    if (i >= 16) {
+        i = 15;
+    }
     s[i--] = 0;                   // null term
 
     while (i >= 0 && s[i] == 32)  // trim trailing spaces
@@ -730,6 +739,21 @@ void SETTINGS_SaveChannelName(uint8_t channel, const char * name)
     memcpy(buf, name, MIN(( int)strlen(name), MAX_EDIT_INDEX));
     EEPROM_WriteBuffer(0x0F50 + offset, buf,8);
     EEPROM_WriteBuffer(0x0F58 + offset, buf + 8,8);
+}
+
+void SETTINGS_SaveChannelNameRaw(uint8_t channel, const uint8_t *name, uint8_t length)
+{
+    if (name == NULL || length == 0) {
+        return;
+    }
+    uint16_t offset = channel * 16;
+    uint8_t buf[16] = {0};
+    if (length > sizeof(buf)) {
+        length = sizeof(buf);
+    }
+    memcpy(buf, name, length);
+    EEPROM_WriteBuffer(0x0F50 + offset, buf, 8);
+    EEPROM_WriteBuffer(0x0F58 + offset, buf + 8, 8);
 }
 
 void SETTINGS_UpdateChannel(uint8_t channel, const VFO_Info_t *pVFO, bool keep)
