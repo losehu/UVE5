@@ -23,7 +23,7 @@ else
   OPT := -O0 -g
 endif
 
-INCS := -I$(ROOT)/src/app -I$(ROOT)/src/app/opencv -I$(ROOT)/src/app/driver -I$(ROOT)/src/app/helper -I$(ROOT)/src/app/ui -I$(ROOT)/src/app/app
+INCS := -I$(ROOT)/src/app -I$(ROOT)/src/app/opencv -I$(ROOT)/src/app/driver -I$(ROOT)/src/app/helper -I$(ROOT)/src/app/ui -I$(ROOT)/src/app/app -I$(ROOT)/src/app/avr/simavr/sim -I$(ROOT)/src/app/avr/simavr/cores -I$(ROOT)/src/app/avr/simavr/parts
 DEFS := -DENABLE_OPENCV \
     -DENABLE_FMRADIO=1 \
     -DENABLE_VOX=1 \
@@ -53,7 +53,7 @@ DEFS := -DENABLE_OPENCV \
     -DENABLE_MESSENGER=1 \
     -DENABLE_MESSENGER_DELIVERY_NOTIFICATION=1 \
     -DENABLE_MESSENGER_NOTIFICATION=1 \
-    -DENABLE_ARDUBOY=1
+    -DENABLE_ARDUBOY_AVR=1
 
 
 FORCE_INC := -include stdio.h 

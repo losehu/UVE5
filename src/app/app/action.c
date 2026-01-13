@@ -280,18 +280,6 @@ void ACTION_Handle(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
         return;
     }
 
-#ifdef ENABLE_ARDUBOY
-    if (gScreenToDisplay == DISPLAY_MAIN &&
-        gWasFKeyPressed &&
-        Key == KEY_SIDE1 &&
-        !bKeyHeld &&
-        !bKeyPressed) {
-        gWasFKeyPressed = false;
-        gUpdateStatus = true;
-        ARDUBOY_Enter();
-        return;
-    }
-#endif
 
     enum ACTION_OPT_t funcShort = ACTION_OPT_NONE;
     enum ACTION_OPT_t funcLong = ACTION_OPT_NONE;

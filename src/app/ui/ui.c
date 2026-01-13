@@ -40,6 +40,9 @@
 #ifdef ENABLE_ARDUBOY
 #include "ui/arduboy.h"
 #endif
+#ifdef ENABLE_ARDUBOY_AVR
+#include "ui/arduboy_avr.h"
+#endif
 
 #include "ui/inputbox.h"
 #include "ui/ime.h"
@@ -64,6 +67,9 @@ void (*UI_DisplayFunctions[])(void) = {
 
 #ifdef ENABLE_ARDUBOY
         [DISPLAY_ARDUBOY] = &UI_DisplayArduboy,
+#endif
+#ifdef ENABLE_ARDUBOY_AVR
+        [DISPLAY_ARDUBOY_AVR] = &UI_DisplayArduboyAvr,
 #endif
 
 #ifdef ENABLE_FMRADIO

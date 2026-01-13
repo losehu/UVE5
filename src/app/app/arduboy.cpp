@@ -1,3 +1,5 @@
+#ifdef ENABLE_ARDUBOY
+
 #include "arduboy.h"
 
 #include "arduboy2.h"
@@ -52,21 +54,17 @@ static void ArduboySeed(void) {
 
 static uint8_t ArduboyMapKey(KEY_Code_t key) {
     switch (key) {
-        case KEY_UP:
         case KEY_2:
             return UP_BUTTON;
-        case KEY_DOWN:
         case KEY_8:
             return DOWN_BUTTON;
         case KEY_4:
             return LEFT_BUTTON;
         case KEY_6:
             return RIGHT_BUTTON;
-        case KEY_SIDE1:
-        case KEY_MENU:
-        case KEY_PTT:
+        case KEY_UP:
             return A_BUTTON;
-        case KEY_SIDE2:
+        case KEY_DOWN:
             return B_BUTTON;
         default:
             return 0;
@@ -446,3 +444,5 @@ void ARDUBOY_Render(void) {
     }
     ArduboyRenderGame();
 }
+
+#endif // ENABLE_ARDUBOY

@@ -48,6 +48,10 @@ void UI_DisplayStatus() {
     if (gScreenToDisplay == DISPLAY_ARDUBOY)
         return;
 #endif
+#ifdef ENABLE_ARDUBOY_AVR
+    if (gScreenToDisplay == DISPLAY_ARDUBOY_AVR)
+        return;
+#endif
     memset(gStatusLine, 0, sizeof(gStatusLine));
 
     uint8_t *line = gStatusLine;

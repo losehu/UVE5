@@ -18,6 +18,7 @@ static std::vector<uint8_t> gLcdCanvas;
 static std::vector<uint8_t> gLcdRgba;
 static GLuint gTexture = 0;
 static bool gGlReady = false;
+static bool gLcdDirty = false;
 
 extern "C" void OPENCV_ShutdownDisplay(void)
 {
@@ -135,6 +136,15 @@ static void UpdateDisplay()
   glEnd();
 
   glfwSwapBuffers(gWindow);
+}
+
+static inline void PresentIfDirty()
+{
+  if (!gLcdDirty) {
+    return;
+  }
+  gLcdDirty = false;
+  UpdateDisplay();
 }
  bool getScreenSize(int& width, int& height) {
 #if defined(_WIN32)
@@ -272,7 +282,7 @@ static void DrawLine(uint8_t column, uint8_t line, const uint8_t *lineBuffer, un
                 }
             }
         }
-        UpdateDisplay();
+        gLcdDirty = true;
     }
     
     CS_HIGH();
@@ -337,7 +347,7 @@ void ST7565_Init(void) {
 
   gGlReady = true;
   ST7565_BlitFullScreen(); // 初始化时清屏
-  UpdateDisplay();
+  PresentIfDirty();
 
 }
 
@@ -346,6 +356,7 @@ void ST7565_Init(void) {
 // 绘制指定位置的一行
 void ST7565_DrawLine(const unsigned int column, const unsigned int line, const uint8_t *pBitmap, const unsigned int size) {
     DrawLine(column, line, pBitmap, size);
+    PresentIfDirty();
     
 }
 
@@ -356,18 +367,21 @@ void ST7565_BlitFullScreen(void) {
     for (unsigned line = 0; line < FRAME_LINES; line++) {
         DrawLine(0, line + 1, gFrameBuffer[line], LCD_WIDTH);
     }
+    PresentIfDirty();
 }
 
 // 刷新单行
 void ST7565_BlitLine(unsigned line) {
     ST7565_WriteByte(0x40);  // 设置起始行
     DrawLine(0, line + 1, gFrameBuffer[line], LCD_WIDTH);
+    PresentIfDirty();
 }
 
 // 刷新状态行
 void ST7565_BlitStatusLine(void) {
     ST7565_WriteByte(0x40);  // 设置起始行
     DrawLine(0, 0, gStatusLine, LCD_WIDTH);
+    PresentIfDirty();
 }
 
 // 填充整个屏幕
@@ -375,6 +389,7 @@ void ST7565_FillScreen(uint8_t value) {
     for (unsigned i = 0; i < 8; i++) {
         DrawLine(0, i, nullptr, value);
     }
+    PresentIfDirty();
 }
 
 // 修复接口故障

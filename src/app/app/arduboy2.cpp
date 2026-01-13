@@ -1,3 +1,5 @@
+#ifdef ENABLE_ARDUBOY
+
 #include "arduboy2.h"
 
 #include <stdio.h>
@@ -206,3 +208,5 @@ void Arduboy2::drawChar(int16_t x, int16_t y, char c) {
         }
     }
 }
+
+#endif // ENABLE_ARDUBOY

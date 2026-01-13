@@ -34,6 +34,9 @@ enum GUI_DisplayType_t
 #ifdef ENABLE_ARDUBOY
     DISPLAY_ARDUBOY,
 #endif
+#ifdef ENABLE_ARDUBOY_AVR
+    DISPLAY_ARDUBOY_AVR,
+#endif
 
 #ifdef ENABLE_FMRADIO
     DISPLAY_FM,
