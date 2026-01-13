@@ -35,6 +35,13 @@
 #include "menu.h"
 #include "ui.h"
 #include "../chinese.h"
+
+#ifdef ENABLE_PINYIN
+static uint8_t PINYIN_ReadCount(uint8_t index);
+static uint16_t PINYIN_CountRange(uint8_t start, uint8_t end);
+static uint16_t PINYIN_FlatIndex(uint8_t start, uint8_t index, uint8_t offset);
+static bool PINYIN_GetFlatEntry(uint8_t start, uint8_t end, uint16_t flat_index, uint8_t *entry_index, uint8_t *entry_offset);
+#endif
 void insertNewline(char a[], int index, int len) {
 
     if (index < 0 || index >= len || len >= 63) {
@@ -1024,52 +1031,58 @@ void UI_DisplayMenu(void) {
 
                             if (INPUT_STAGE >= 1)//显示拼音
                             {
-                                uint8_t num = (PINYIN_NUM_SELECT) / 3;
-                                if ((PINYIN_NOW_NUM + 2) / 3 > 1 + num)memcpy(&gFrameBuffer[1][123], BITMAP_ARRAY_DOWN, 5);
-                                if (num)memcpy(&gFrameBuffer[0][123], BITMAP_ARRAY_UP, 5);
-
                                 if (PINYIN_SEARCH_MODE == 1)//准确的组合
                                 {
+                                    uint8_t num = (PINYIN_NUM_SELECT) / 3;
+                                    if ((PINYIN_NOW_NUM + 2) / 3 > 1 + num)memcpy(&gFrameBuffer[1][123], BITMAP_ARRAY_DOWN, 5);
+                                    if (num)memcpy(&gFrameBuffer[0][123], BITMAP_ARRAY_UP, 5);
 
-
-
-//OK
-                                    //目前有多少个拼音
                                     uint8_t HAVE_PINYIN = PINYIN_NOW_NUM - num * 3 > 3 ? 3 : PINYIN_NOW_NUM - num * 3;
-
-//OK
-//                                    show_uint32(PINYIN_NOW_NUM,0);
-//                                    sprintf(String,"%d",PINYIN_NUM_SELECT);
-//                                    UI_PrintStringSmall(String, 0, 0, 4);
-//                                    show_uint32(PINYIN_NOW_NUM,1);
-//                                    show_uint32(HAVE_PINYIN,1);
                                     for (int j = 0; j < HAVE_PINYIN; ++j) {
                                         PINYIN_Read(
                                                 PINYIN_NOW_INDEX * 128 + 0X20000 + 16 + num * 3 * 16 +
                                                 j * 16, tmp, 6);
-                                        memcpy(&String[6 * j], tmp, 6);//0 1 2 3 4 5
+                                        memcpy(&String[6 * j], tmp, 6);
                                     }
-//#include "menu.h"
-//#include "helper.h"
-//
-//                                    if (PINYIN_CODE == 200000 && test_flag) {
-//                                        show_uint32(edit_index, 0);
-//                                        show_uint32(gIsInSubMenu, 1);
-//                                        show_uint32(1, 2);
-//                                        while (1);
-//                                    }
-                                    //NOT OK
                                     String[6 * HAVE_PINYIN] = 0;
                                     UI_PrintStringSmall(String, 0, 0, 0);
-//NOT OK
+                                } else if (PINYIN_SEARCH_MODE == 2) {
+                                    uint16_t total = PINYIN_CountRange(PINYIN_START_INDEX, PINYIN_END_INDEX);
+                                    if (total) {
+                                        uint16_t flat_index = PINYIN_FlatIndex(PINYIN_START_INDEX, PINYIN_NOW_INDEX, PINYIN_NUM_SELECT);
+                                        uint16_t page = flat_index / 3;
+                                        uint16_t page_start = page * 3;
+                                        uint16_t total_pages = (total + 2) / 3;
+                                        uint8_t HAVE_PINYIN = total - page_start > 3 ? 3 : (uint8_t)(total - page_start);
+                                        if (page + 1 < total_pages)memcpy(&gFrameBuffer[1][123], BITMAP_ARRAY_DOWN, 5);
+                                        if (page)memcpy(&gFrameBuffer[0][123], BITMAP_ARRAY_UP, 5);
 
+                                        for (uint8_t j = 0; j < HAVE_PINYIN; ++j) {
+                                            uint8_t entry_index = 0;
+                                            uint8_t entry_offset = 0;
+                                            if (PINYIN_GetFlatEntry(PINYIN_START_INDEX, PINYIN_END_INDEX,
+                                                                    page_start + j, &entry_index, &entry_offset)) {
+                                                PINYIN_Read(
+                                                        entry_index * 128 + 0X20000 + 16 + entry_offset * 16,
+                                                        tmp, 6);
+                                                memcpy(&String[6 * j], tmp, 6);
+                                            }
+                                        }
+                                        String[6 * HAVE_PINYIN] = 0;
+                                        UI_PrintStringSmall(String, 0, 0, 0);
+                                    }
                                 }
                             }
                             if (INPUT_STAGE == 2) {
 
-                                if (PINYIN_SEARCH_MODE == 1)//准确的组合
+                                if (PINYIN_SEARCH_MODE == 1 || PINYIN_SEARCH_MODE == 2)//准确的组合
                                 {
-                                    memcpy(&gFrameBuffer[1][(PINYIN_NUM_SELECT % 3) * 7 * 6], BITMAP_ARRAY_UP, 5);
+                                    uint8_t pos = PINYIN_NUM_SELECT % 3;
+                                    if (PINYIN_SEARCH_MODE == 2) {
+                                        uint16_t flat_index = PINYIN_FlatIndex(PINYIN_START_INDEX, PINYIN_NOW_INDEX, PINYIN_NUM_SELECT);
+                                        pos = flat_index % 3;
+                                    }
+                                    memcpy(&gFrameBuffer[1][pos * 7 * 6], BITMAP_ARRAY_UP, 5);
 
                                     uint8_t SHOW_NUM =
                                             CHN_NOW_NUM - CHN_NOW_PAGE * 6 > 6 ? 6 : CHN_NOW_NUM - CHN_NOW_PAGE * 6;
@@ -1573,6 +1586,62 @@ char num_excel[8][4] = {
 };
 uint8_t num_size[8]={3,3,3,3,3,4,3,4};
 
+static uint8_t PINYIN_ReadCount(uint8_t index)
+{
+    uint8_t tmp[5];
+
+    PINYIN_Read(index * 128 + 0x20000, tmp, 5);
+    return tmp[4];
+}
+
+static uint16_t PINYIN_CountRange(uint8_t start, uint8_t end)
+{
+    uint16_t total = 0;
+
+    if (end < start) {
+        return 0;
+    }
+    for (uint8_t i = start; i <= end; ++i) {
+        total += PINYIN_ReadCount(i);
+    }
+    return total;
+}
+
+static uint16_t PINYIN_FlatIndex(uint8_t start, uint8_t index, uint8_t offset)
+{
+    uint16_t total = 0;
+
+    if (index < start) {
+        return 0;
+    }
+    for (uint8_t i = start; i < index; ++i) {
+        total += PINYIN_ReadCount(i);
+    }
+    total += offset;
+    return total;
+}
+
+static bool PINYIN_GetFlatEntry(uint8_t start, uint8_t end, uint16_t flat_index, uint8_t *entry_index, uint8_t *entry_offset)
+{
+    if (end < start) {
+        return false;
+    }
+    for (uint8_t i = start; i <= end; ++i) {
+        uint8_t count = PINYIN_ReadCount(i);
+        if (flat_index < count) {
+            if (entry_index != NULL) {
+                *entry_index = i;
+            }
+            if (entry_offset != NULL) {
+                *entry_offset = (uint8_t)flat_index;
+            }
+            return true;
+        }
+        flat_index -= count;
+    }
+    return false;
+}
+
 uint32_t formatInt(uint32_t number) {//数字转拼音编码
     uint32_t formatted = number;
     uint32_t length = 0;
@@ -1653,6 +1722,7 @@ uint8_t sear_pinyin_code(uint32_t target, uint8_t *pinyin_num, uint8_t *found)//
 
 
         if (judge_belong(target, left_num)) {
+            *pinyin_num = tmp[4];
             return left;
         }
     }

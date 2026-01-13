@@ -92,51 +92,84 @@ void MENU_StartCssScan(void) {
     gRequestDisplayScreen = DISPLAY_MENU;
 }
 #ifdef ENABLE_PINYIN
+static void PINYIN_ReadHeader(uint8_t index, uint32_t *code, uint8_t *num)
+{
+    uint8_t tmp[5];
+
+    PINYIN_Read(index * 128 + 0x20000, tmp, 5);
+    if (code != NULL) {
+        *code = (uint32_t)tmp[0] | ((uint32_t)tmp[1] << 8) | ((uint32_t)tmp[2] << 16) | ((uint32_t)tmp[3] << 24);
+    }
+    if (num != NULL) {
+        *num = tmp[4];
+    }
+}
+
 void PINYIN_SOLVE(uint32_t tmp) {
 
     if (INPUT_STAGE == 0) {
         INPUT_STAGE = 1;
     }
-    uint8_t tmp_PINYIN_SEARCH_INDEX = PINYIN_SEARCH_INDEX;
-    uint8_t tmp_PINYIN_SEARCH_NUM = PINYIN_SEARCH_NUM;
-    uint8_t tmp_PINYIN_SEARCH_FOUND = PINYIN_SEARCH_FOUND;
+    uint8_t prev_search_index = PINYIN_SEARCH_INDEX;
+    uint8_t prev_search_num = PINYIN_SEARCH_NUM;
+    uint8_t prev_search_found = PINYIN_SEARCH_FOUND;
+    uint8_t prev_search_mode = PINYIN_SEARCH_MODE;
+    uint8_t prev_now_index = PINYIN_NOW_INDEX;
+    uint8_t prev_now_num = PINYIN_NOW_NUM;
+    uint8_t prev_start_index = PINYIN_START_INDEX;
+    uint8_t prev_end_index = PINYIN_END_INDEX;
+    uint8_t prev_num_select = PINYIN_NUM_SELECT;
 
     PINYIN_SEARCH_INDEX = sear_pinyin_code(PINYIN_CODE, &PINYIN_SEARCH_NUM, &PINYIN_SEARCH_FOUND);
 
     if (PINYIN_SEARCH_INDEX == 255 && PINYIN_SEARCH_FOUND == 0) {
         PINYIN_CODE = tmp;
         PINYIN_CODE_INDEX *= 10;
-        PINYIN_SEARCH_INDEX = tmp_PINYIN_SEARCH_INDEX;
-        PINYIN_SEARCH_NUM = tmp_PINYIN_SEARCH_NUM;
-        PINYIN_SEARCH_FOUND = tmp_PINYIN_SEARCH_FOUND;
+        PINYIN_SEARCH_INDEX = prev_search_index;
+        PINYIN_SEARCH_NUM = prev_search_num;
+        PINYIN_SEARCH_FOUND = prev_search_found;
+        PINYIN_SEARCH_MODE = prev_search_mode;
+        PINYIN_NOW_INDEX = prev_now_index;
+        PINYIN_NOW_NUM = prev_now_num;
+        PINYIN_START_INDEX = prev_start_index;
+        PINYIN_END_INDEX = prev_end_index;
+        PINYIN_NUM_SELECT = prev_num_select;
         if (PINYIN_CODE_INDEX == 100000)INPUT_STAGE = 0;
+        return;
     }
 
     if (INPUT_STAGE) {
+        bool force_prefix = true;
+
         //��Ҫѡƴ��
-        if (PINYIN_SEARCH_FOUND) {
+        if (PINYIN_SEARCH_FOUND && !force_prefix) {
             if (PINYIN_SEARCH_INDEX != 255) {
                 //ȷʵ�������ƴ�����
                 PINYIN_NOW_INDEX = PINYIN_SEARCH_INDEX;
                 PINYIN_NOW_NUM = PINYIN_SEARCH_NUM;
                 PINYIN_SEARCH_MODE = 1;
+                PINYIN_NUM_SELECT = 0;
             }
         } else {
-            //û�����ƴ����ϵ����б�ѡ
-//            PINYIN_SEARCH_MODE = 2;
-//            PINYIN_NOW_INDEX = PINYIN_SEARCH_INDEX;
-//            PINYIN_NOW_NUM = PINYIN_SEARCH_NUM;
-//            PINYIN_START_INDEX = PINYIN_NOW_INDEX;
-//
-//            for (int i = PINYIN_START_INDEX; i < 214; ++i) {
-//                uint8_t tmp[4];
-//                uint32_t tmp_code;
-//                EEPROM_ReadBuffer(128 * i + 0x20000, tmp, 4);
-//                tmp_code = tmp[0] | tmp[1] << 8 | tmp[2] << 16 | tmp[3] << 24;
-//                if (judge_belong(PINYIN_CODE, tmp_code)) {
-//                    PINYIN_END_INDEX = i;
-//                } else break;
-//            }
+            if (PINYIN_SEARCH_INDEX == 255) {
+                return;
+            }
+            PINYIN_SEARCH_MODE = 2;
+            PINYIN_START_INDEX = PINYIN_SEARCH_INDEX;
+            PINYIN_END_INDEX = PINYIN_SEARCH_INDEX;
+            PINYIN_NOW_INDEX = PINYIN_SEARCH_INDEX;
+            PINYIN_NOW_NUM = PINYIN_SEARCH_NUM;
+            PINYIN_NUM_SELECT = 0;
+
+            for (uint8_t i = PINYIN_START_INDEX; i < 214; ++i) {
+                uint32_t tmp_code = 0;
+                PINYIN_ReadHeader(i, &tmp_code, NULL);
+                if (judge_belong(PINYIN_CODE, tmp_code)) {
+                    PINYIN_END_INDEX = i;
+                } else {
+                    break;
+                }
+            }
         }
     }
 }
@@ -1650,6 +1683,26 @@ static void MENU_Key_MENU(const bool bKeyPressed, const bool bKeyHeld) {
                         UPDATE_CHN();
                         return;
                     }
+                } else if (PINYIN_SEARCH_MODE == 2) {
+                    if (INPUT_STAGE == 1) {
+                        INPUT_STAGE = 2;
+                        UPDATE_CHN();
+                        return;
+                    } else if (INPUT_STAGE == 2) {
+                        if (PINYIN_NUM_SELECT + 1 < PINYIN_NOW_NUM) {
+                            PINYIN_NUM_SELECT++;
+                        } else {
+                            uint8_t next_index = PINYIN_NOW_INDEX + 1;
+                            if (next_index > PINYIN_END_INDEX || next_index < PINYIN_START_INDEX) {
+                                next_index = PINYIN_START_INDEX;
+                            }
+                            PINYIN_NOW_INDEX = next_index;
+                            PINYIN_NUM_SELECT = 0;
+                            PINYIN_ReadHeader(PINYIN_NOW_INDEX, NULL, &PINYIN_NOW_NUM);
+                        }
+                        UPDATE_CHN();
+                        return;
+                    }
                 }
             } else if (INPUT_MODE == 3) {
                 INPUT_MODE = INPUT_MODE_LAST;
@@ -1898,7 +1951,7 @@ static void MENU_Key_UP_DOWN(bool bKeyPressed, bool bKeyHeld, int8_t Direction) 
 
                 if (INPUT_MODE == 0) {
                     if (INPUT_STAGE == 2) {
-                        if (PINYIN_SEARCH_MODE == 1)//׼ȷ�����
+                        if (PINYIN_SEARCH_MODE == 1 || PINYIN_SEARCH_MODE == 2)//׼ȷ�����
                         {
                             if (Direction == 1) {
                                 if (CHN_NOW_PAGE) CHN_NOW_PAGE--;

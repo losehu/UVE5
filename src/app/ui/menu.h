@@ -335,6 +335,7 @@ extern uint8_t PINYIN_NOW_INDEX;//当前拼音组合地址
 extern uint8_t PINYIN_NOW_NUM;//当前拼音组合地址
 extern uint8_t PINYIN_SEARCH_MODE;
 extern uint8_t PINYIN_START_INDEX;
+extern uint8_t PINYIN_END_INDEX;
 extern uint8_t PINYIN_NUM_SELECT;
 extern uint32_t CHN_NOW_ADD;
 extern uint8_t CHN_NOW_NUM;
