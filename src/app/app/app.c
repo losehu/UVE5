@@ -94,6 +94,9 @@
 #include "../ui/status.h"
 #include "../ui/ui.h"
 #include "messenger.h"
+#ifdef ENABLE_ARDUBOY
+#include "arduboy.h"
+#endif
 
 #ifdef ENABLE_MESSENGER_NOTIFICATION
 bool gPlayMSGRing = false;
@@ -102,6 +105,9 @@ uint8_t gPlayMSGRingCount = 0;
 static bool flagSaveVfo;
 static bool flagSaveSettings;
 static bool flagSaveChannel;
+#ifdef ENABLE_ARDUBOY
+static bool gIgnoreArduboySide1Release;
+#endif
 
 static void ProcessKey(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld);
 
@@ -110,6 +116,10 @@ void (*ProcessKeysFunctions[])(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) 
         [DISPLAY_MENU] = &MENU_ProcessKeys,
         [DISPLAY_SCANNER] = &SCANNER_ProcessKeys,
         [DISPLAY_IME] = &IME_ProcessKeys,
+
+#ifdef ENABLE_ARDUBOY
+        [DISPLAY_ARDUBOY] = &ARDUBOY_ProcessKeys,
+#endif
 
 #ifdef ENABLE_FMRADIO
         [DISPLAY_FM] = &FM_ProcessKeys,
@@ -1253,6 +1263,10 @@ gAlarmState = ALARM_STATE_SITE_ALARM;
 #endif
 
     CheckKeys();
+#ifdef ENABLE_ARDUBOY
+    if (gScreenToDisplay == DISPLAY_ARDUBOY)
+        ARDUBOY_TimeSlice10ms();
+#endif
 }
 
 void cancelUserInputModes(void) {
@@ -1557,6 +1571,15 @@ static void ProcessKey(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
         gBeepToPlay = BEEP_NONE;
         return;
     }
+#ifdef ENABLE_ARDUBOY
+    if (gIgnoreArduboySide1Release &&
+        Key == KEY_SIDE1 &&
+        !bKeyPressed &&
+        !bKeyHeld) {
+        gIgnoreArduboySide1Release = false;
+        return;
+    }
+#endif
 
     if (gCurrentFunction == FUNCTION_POWER_SAVE)
         FUNCTION_Select(FUNCTION_FOREGROUND); //OK
@@ -1749,6 +1772,20 @@ static void ProcessKey(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
         }
     }
 
+#ifdef ENABLE_ARDUBOY
+    if (gWasFKeyPressed &&
+        gScreenToDisplay == DISPLAY_MAIN &&
+        Key == KEY_SIDE1 &&
+        bKeyPressed &&
+        !bKeyHeld) {
+        gWasFKeyPressed = false;
+        gUpdateStatus = true;
+        gIgnoreArduboySide1Release = true;
+        ARDUBOY_Enter();
+        return;
+    }
+#endif
+
     if (gWasFKeyPressed &&
         (Key == KEY_PTT || Key == KEY_EXIT || Key == KEY_SIDE1 || Key == KEY_SIDE2)) {    // cancel the F-key
         gWasFKeyPressed = false;
@@ -1819,7 +1856,11 @@ static void ProcessKey(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
         }
 #endif
     } else if (gScreenToDisplay != DISPLAY_INVALID &&
-               (gScreenToDisplay == DISPLAY_IME || (Key != KEY_SIDE1 && Key != KEY_SIDE2))) {
+               (gScreenToDisplay == DISPLAY_IME
+#ifdef ENABLE_ARDUBOY
+                || gScreenToDisplay == DISPLAY_ARDUBOY
+#endif
+                || (Key != KEY_SIDE1 && Key != KEY_SIDE2))) {
         ProcessKeysFunctions[gScreenToDisplay](Key, bKeyPressed, bKeyHeld);
     } else if (!SCANNER_IsScanning()
 #ifdef ENABLE_AIRCOPY

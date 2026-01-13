@@ -4,10 +4,36 @@
 
 > 硬件在固件测试完成后发布
 ![alt text](img.png)
+![OpenCV 仿真环境效果图](show.png)
 
 ## 📋 项目简介
 ![alt text](cf841e602244e825aae333f2b318ddb6_720.png)
 本项目将 ESP32-S3 作为 Quansheng UV-K5 对讲机的主控芯片,替代原有的 DP32G030 MCU。通过 ESP32-S3 强大的处理能力和丰富的外设,为 UV-K5 带来以下增强功能:
+
+## 🖥️ OpenCV 仿真环境
+
+本项目提供基于 OpenCV 的上位机仿真环境,用于快速验证显示与界面逻辑。
+
+![OpenCV 仿真环境效果图](show.png)
+
+### 编译与运行
+
+```bash
+# 编译
+make -C src/app/opencv
+
+# 运行
+make -C src/app/opencv run
+
+# 清理
+make -C src/app/opencv clean
+```
+
+### 说明
+
+- **依赖**: 需要 `glfw3`(通过 `pkg-config` 自动检测),在 macOS/Linux 上确保可用。
+- **产物位置**: 可执行文件输出到 `bin/opencv_app`,中间产物在 `build/opencv/`。
+- **构建模式**: 默认 `BUILD=debug`,可用 `make -C src/app/opencv BUILD=release` 生成优化版本。
 
 ### ✨ 主要特性
 

@@ -45,6 +45,9 @@
 #include "settings.h"
 #include "../ui/inputbox.h"
 #include "../ui/ui.h"
+#ifdef ENABLE_ARDUBOY
+#include "arduboy.h"
+#endif
 
 #if defined(ENABLE_FMRADIO)
 static void ACTION_Scan_FM(bool bRestart);
@@ -276,6 +279,19 @@ void ACTION_Handle(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
 #endif
         return;
     }
+
+#ifdef ENABLE_ARDUBOY
+    if (gScreenToDisplay == DISPLAY_MAIN &&
+        gWasFKeyPressed &&
+        Key == KEY_SIDE1 &&
+        !bKeyHeld &&
+        !bKeyPressed) {
+        gWasFKeyPressed = false;
+        gUpdateStatus = true;
+        ARDUBOY_Enter();
+        return;
+    }
+#endif
 
     enum ACTION_OPT_t funcShort = ACTION_OPT_NONE;
     enum ACTION_OPT_t funcLong = ACTION_OPT_NONE;

@@ -37,6 +37,9 @@
 #ifdef ENABLE_FMRADIO
 #include "ui/fmradio.h"
 #endif
+#ifdef ENABLE_ARDUBOY
+#include "ui/arduboy.h"
+#endif
 
 #include "ui/inputbox.h"
 #include "ui/ime.h"
@@ -58,6 +61,10 @@ void (*UI_DisplayFunctions[])(void) = {
         [DISPLAY_MENU] = &UI_DisplayMenu,
         [DISPLAY_SCANNER] = &UI_DisplayScanner,
         [DISPLAY_IME] = &UI_DisplayIme,
+
+#ifdef ENABLE_ARDUBOY
+        [DISPLAY_ARDUBOY] = &UI_DisplayArduboy,
+#endif
 
 #ifdef ENABLE_FMRADIO
         [DISPLAY_FM] = &UI_DisplayFM,

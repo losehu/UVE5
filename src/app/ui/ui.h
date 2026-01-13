@@ -31,6 +31,10 @@ enum GUI_DisplayType_t
     DISPLAY_SCANNER,
     DISPLAY_IME,
 
+#ifdef ENABLE_ARDUBOY
+    DISPLAY_ARDUBOY,
+#endif
+
 #ifdef ENABLE_FMRADIO
     DISPLAY_FM,
 #endif
