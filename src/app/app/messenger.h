@@ -6,6 +6,10 @@
 #include <string.h>
 #include "../driver/keyboard.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef ENABLE_MESSENGER
 
 
@@ -50,5 +54,9 @@ extern bool stop_mdc_flag;
 #endif
 
 void solve_sign(const uint16_t interrupt_bits);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

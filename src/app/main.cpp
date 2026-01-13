@@ -48,7 +48,9 @@
 
 
 #endif
-
+#ifdef ENABLE_MESSENGER
+#include "app/messenger.h"  
+#endif
 #include "audio.h"
 #include "board.h"
 #include "misc.h"

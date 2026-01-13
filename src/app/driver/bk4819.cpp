@@ -27,6 +27,9 @@
 #ifdef ENABLE_MDC1200
 #include "mdc1200.h"
 #endif
+#ifdef ENABLE_MESSENGER
+extern bool stop_mdc_flag;
+#endif
 
 #include "../misc.h"
 
