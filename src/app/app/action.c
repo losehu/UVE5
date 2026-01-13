@@ -511,7 +511,7 @@ static void ACTION_AlarmOr1750(const bool b1750)
 
     gFlagPrepareTX = gAlarmState != ALARM_STATE_OFF;
 
-    if (gScreenToDisplay != DISPLAY_MENU)      // 1of11 .. don't close the menu
+    if (gScreenToDisplay != DISPLAY_MENU && gScreenToDisplay != DISPLAY_IME)      // 1of11 .. don't close the menu
         gRequestDisplayScreen = DISPLAY_MAIN;
 
 }

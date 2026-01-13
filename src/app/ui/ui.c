@@ -39,6 +39,7 @@
 #endif
 
 #include "ui/inputbox.h"
+#include "ui/ime.h"
 #include "ui/main.h"
 #include "ui/menu.h"
 #include "ui/scanner.h"
@@ -56,6 +57,7 @@ void (*UI_DisplayFunctions[])(void) = {
         [DISPLAY_MAIN] = &UI_DisplayMain,
         [DISPLAY_MENU] = &UI_DisplayMenu,
         [DISPLAY_SCANNER] = &UI_DisplayScanner,
+        [DISPLAY_IME] = &UI_DisplayIme,
 
 #ifdef ENABLE_FMRADIO
         [DISPLAY_FM] = &UI_DisplayFM,
@@ -84,20 +86,25 @@ void GUI_SelectNextDisplay(GUI_DisplayType_t Display) {
         return;
 
     if (gScreenToDisplay != Display) {
+        const bool preserve_menu_state =
+                (gScreenToDisplay == DISPLAY_MENU && Display == DISPLAY_IME) ||
+                (gScreenToDisplay == DISPLAY_IME && Display == DISPLAY_MENU);
+
         DTMF_clear_input_box();
+        if (!preserve_menu_state) {
+            gInputBoxIndex = 0;
+            gIsInSubMenu = false;
 
-        gInputBoxIndex = 0;
-        gIsInSubMenu = false;
-
-        gCssBackgroundScan = false;
-        gScanStateDir = SCAN_OFF;
+            gCssBackgroundScan = false;
+            gScanStateDir = SCAN_OFF;
 #ifdef ENABLE_FMRADIO
-        gFM_ScanState    = FM_SCAN_OFF;
+            gFM_ScanState    = FM_SCAN_OFF;
 #endif
-        gAskForConfirmation = 0;
-        gAskToSave = false;
-        gAskToDelete = false;
-        gWasFKeyPressed = false;
+            gAskForConfirmation = 0;
+            gAskToSave = false;
+            gAskToDelete = false;
+            gWasFKeyPressed = false;
+        }
 
         gUpdateStatus = true;
     }

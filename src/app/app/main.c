@@ -83,7 +83,7 @@ void toggle_chan_scanlist(void) {    // toggle the selected channels scanlist se
 static void processFKeyFunction(const KEY_Code_t Key, const bool beep) {
     uint8_t Vfo = gEeprom.TX_VFO;
 
-    if (gScreenToDisplay == DISPLAY_MENU) {
+    if (gScreenToDisplay == DISPLAY_MENU || gScreenToDisplay == DISPLAY_IME) {
 //		if (beep)
         gBeepToPlay = BEEP_500HZ_60MS_DOUBLE_BEEP_OPTIONAL;
         return;

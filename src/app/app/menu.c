@@ -39,6 +39,7 @@
 #include "../misc.h"
 #include "../pinyin_blob.h"
 #include "../settings.h"
+#include "ime.h"
 
 #if defined(ENABLE_OVERLAY)
 #include "sram-overlay.h"
@@ -89,6 +90,20 @@ void MENU_StartCssScan(void) {
     gUpdateStatus = true;
     gCssBackgroundScan = true;
 
+    gRequestDisplayScreen = DISPLAY_MENU;
+}
+
+static void MENU_IME_Done(bool accepted, void *ctx) {
+    (void)ctx;
+
+    if (accepted) {
+        edit_index = MAX_EDIT_INDEX;
+        gAskForConfirmation = 1;
+    } else {
+        memmove(edit, edit_original, sizeof(edit_original));
+        edit_index = -1;
+        gAskForConfirmation = 0;
+    }
     gRequestDisplayScreen = DISPLAY_MENU;
 }
 #ifdef ENABLE_PINYIN
@@ -1791,6 +1806,7 @@ static void MENU_Key_MENU(const bool bKeyPressed, const bool bKeyHeld) {
             edit_index = 0;  // 'edit_index' is going to be used as the cursor position
 
             memcpy(edit_original, edit, sizeof(edit_original));
+            IME_Start(edit, MAX_EDIT_INDEX, MENU_IME_Done, NULL);
             return;
         } else if (edit_index >= 0 && edit_index < MAX_EDIT_INDEX) {    // editing the channel name characters
 

@@ -573,12 +573,6 @@ uint8_t UI_MENU_GetMenuIdx(uint8_t id) {
 
 int32_t gSubMenuSelection;
 
-// edit box
-char edit_original[17]; // a copy of the text before editing so that we can easily test for changes/difference
-char edit[17];
-int edit_index;
-
-
 void UI_DisplayMenu(void) {
     const unsigned int menu_list_width = 6; // max no. of characters on the menu list (left side)
     const unsigned int menu_item_x1 = (8 * menu_list_width);//+ 2;
@@ -982,7 +976,7 @@ void UI_DisplayMenu(void) {
                         uint8_t sum_pxl = 0;
 
                         for (int j = 0; j < MAX_EDIT_INDEX; ++j) {
-                            if (edit[j] >= 0xb0 && j != MAX_EDIT_INDEX - 1) {
+                            if ((uint8_t)edit[j] >= 0xb0 && j != MAX_EDIT_INDEX - 1) {
                                 if (j < edit_index) {
                                     sum_pxl += 13;
                                 }
@@ -1549,43 +1543,6 @@ void UI_ShowChineseMenu() {
 }
 #endif
 #ifdef ENABLE_PINYIN
-uint8_t INPUT_SELECT = 0;//选择的按键
-uint8_t INPUT_MODE_LAST = 0;
-uint8_t INPUT_MODE = 0;//0中文 1英文 2数字、符号
-uint8_t INPUT_STAGE = 0;//中文：0 还没输入，不显示拼音和汉字 1输入了
-uint32_t PINYIN_CODE = 0;
-uint32_t PINYIN_CODE_INDEX = 100000;
-uint8_t PINYIN_SEARCH_INDEX = 0;
-uint8_t PINYIN_SEARCH_FOUND = 0;
-uint8_t PINYIN_SEARCH_NUM = 0;
-uint8_t PINYIN_NOW_INDEX = 0;//当前拼音组合地址
-uint8_t PINYIN_NOW_NUM = 0;
-uint8_t PINYIN_SEARCH_MODE = 0;
-uint8_t PINYIN_START_INDEX = 0;
-uint8_t PINYIN_END_INDEX = 0;
-uint8_t PINYIN_NOW_PAGE = 0;
-uint8_t PINYIN_NUM_SELECT = 0;
-uint32_t CHN_NOW_ADD = 0;
-uint8_t CHN_NOW_NUM = 0;
-uint8_t CHN_NOW_PAGE = 0;
-uint8_t edit_chn[MAX_EDIT_INDEX];
-//英语：0 未选字 1选字
-//数字：0正常模式 1按了上下的轮询模式，需要按MENU确定
-char input1[22];
-char input2[22];
-char num_excel[8][4] = {
-        {'a','b','c','\0'},
-        {'d','e','f','\0'},
-        {'g','h','i','\0'},
-        {'j','k','l','\0'},
-        {'m','n','o','\0'},
-        {'p','q','r','s'},
-        {'t','u','v','\0'},
-        {'w','x','y','z'},
-
-};
-uint8_t num_size[8]={3,3,3,3,3,4,3,4};
-
 static uint8_t PINYIN_ReadCount(uint8_t index)
 {
     uint8_t tmp[5];
@@ -1641,93 +1598,4 @@ static bool PINYIN_GetFlatEntry(uint8_t start, uint8_t end, uint16_t flat_index,
     }
     return false;
 }
-
-uint32_t formatInt(uint32_t number) {//数字转拼音编码
-    uint32_t formatted = number;
-    uint32_t length = 0;
-    // 计算整数的位数
-    while (number != 0) {
-        number /= 10;
-        length++;
-    }
-    // 如果位数不足6位，则在后面补0
-    if (length < 6) {
-        for (uint8_t i = 0; i < 6 - length; ++i) {
-            formatted *= 10;
-        }
-    }
-    return formatted;
-}
-
-
-uint32_t get_num(const char *a) {//拼音转数字
-    uint32_t num = 0;
-    uint32_t bin = 100000;
-    for (unsigned int j = 0; j < strlen(a); j++) {
-        uint32_t now_num = 0;
-        for (int i = 0; i < 8; ++i) {
-            for (int k = 0; k < num_size[i]; ++k) {
-                if (num_excel[i][k] == a[j]) {
-                    now_num = i + 2;
-                    goto end_loop;
-                }
-            }
-        }
-        end_loop:
-        num += bin * now_num;
-        bin /= 10;
-    }
-    return num;
-}
-
-bool judge_belong(uint32_t a, uint32_t b)//拼音归属判断
-{
-    for (uint32_t i = 100000; i >= 1; i /= 10) {
-        if (a / i == 0)break;
-        if (a / i != b / i)return false;
-        a = a - a / i * i;
-        b = b - b / i * i;
-
-    }
-    return true;
-}
-
-uint8_t sear_pinyin_code(uint32_t target, uint8_t *pinyin_num, uint8_t *found)//返回拼音索引0~213，以及是否找到
-{
-    int left = 0;
-    int right = 213;
-    *found = 0; // 初始设定未找到
-
-    while (left <= right) {
-        int mid = left + (right - left) / 2;
-        uint8_t tmp[5];
-        PINYIN_Read(mid * 128 + 0x20000, tmp, 5);
-        uint32_t mid_num = tmp[0] | tmp[1] << 8 | tmp[2] << 16 | tmp[3] << 24;
-        *pinyin_num = tmp[4];
-        if (mid_num == target) {
-            *found = 1; // 找到了
-            return mid;
-        } else if (target < mid_num) {
-            right = mid - 1;
-        } else {
-            left = mid + 1;
-        }
-    }
-
-    // 找不到目标值，返回比目标值大一个的值
-    if (left <= 213) {
-        uint8_t tmp[5];
-        PINYIN_Read(left * 128 + 0x20000, tmp, 5);
-        uint32_t left_num = tmp[0] | tmp[1] << 8 | tmp[2] << 16 | tmp[3] << 24;
-
-
-        if (judge_belong(target, left_num)) {
-            *pinyin_num = tmp[4];
-            return left;
-        }
-    }
-    return 255;
-
-}
-
 #endif

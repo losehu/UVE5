@@ -90,6 +90,7 @@
 #include "../ui/inputbox.h"
 #include "../ui/main.h"
 #include "../ui/menu.h"
+#include "ime.h"
 #include "../ui/status.h"
 #include "../ui/ui.h"
 #include "messenger.h"
@@ -108,6 +109,7 @@ void (*ProcessKeysFunctions[])(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) 
         [DISPLAY_MAIN] = &MAIN_ProcessKeys,
         [DISPLAY_MENU] = &MENU_ProcessKeys,
         [DISPLAY_SCANNER] = &SCANNER_ProcessKeys,
+        [DISPLAY_IME] = &IME_ProcessKeys,
 
 #ifdef ENABLE_FMRADIO
         [DISPLAY_FM] = &FM_ProcessKeys,
@@ -501,7 +503,7 @@ gEeprom.ScreenChannel[vfo] = gRxVfo->CHANNEL_SAVE;
     if (function == FUNCTION_MONITOR)
 #endif
     {    // squelch is disabled
-        if (gScreenToDisplay != DISPLAY_MENU)     // 1of11 .. don't close the menu
+        if (gScreenToDisplay != DISPLAY_MENU && gScreenToDisplay != DISPLAY_IME)     // 1of11 .. don't close the menu
             GUI_SelectNextDisplay(DISPLAY_MAIN);
     } else
         gUpdateDisplay = true;
@@ -1334,7 +1336,7 @@ void APP_TimeSlice500ms(void) {
 
     if (gMenuCountdown > 0)
         if (--gMenuCountdown == 0)
-            exit_menu = (gScreenToDisplay == DISPLAY_MENU);    // exit menu mode
+            exit_menu = (gScreenToDisplay == DISPLAY_MENU || gScreenToDisplay == DISPLAY_IME);    // exit menu mode
 
 #ifdef ENABLE_DTMF_CALLING
     if (gDTMF_RX_timeout > 0)
@@ -1542,7 +1544,7 @@ if (gAlarmState == ALARM_STATE_TXALARM || gAlarmState == ALARM_STATE_TX1750) {
 
     RADIO_SetupRegisters(true);
 
-    if (gScreenToDisplay != DISPLAY_MENU)     // 1of11 .. don't close the menu
+    if (gScreenToDisplay != DISPLAY_MENU && gScreenToDisplay != DISPLAY_IME)     // 1of11 .. don't close the menu
         gRequestDisplayScreen = DISPLAY_MAIN;
 }
 #endif
@@ -1635,7 +1637,7 @@ static void ProcessKey(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
 #endif
         }
 
-        if (gScreenToDisplay == DISPLAY_MENU)       // 1of11
+        if (gScreenToDisplay == DISPLAY_MENU || gScreenToDisplay == DISPLAY_IME)       // 1of11
             gMenuCountdown = menu_timeout_500ms;
 
 #ifdef ENABLE_DTMF_CALLING

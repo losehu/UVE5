@@ -7,7 +7,7 @@
 
 void COMMON_KeypadLockToggle() {
 
-    if (gScreenToDisplay != DISPLAY_MENU &&
+    if (gScreenToDisplay != DISPLAY_MENU && gScreenToDisplay != DISPLAY_IME &&
         gCurrentFunction != FUNCTION_TRANSMIT) {    // toggle the keyboad lock
 
 #ifdef ENABLE_VOICE

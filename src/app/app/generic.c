@@ -123,7 +123,7 @@ void GENERIC_Key_PTT(bool bKeyPressed) {
 
             RADIO_SetVfoState(VFO_STATE_NORMAL);
 
-            if (gScreenToDisplay != DISPLAY_MENU)     // 1of11 .. don't close the menu
+            if (gScreenToDisplay != DISPLAY_MENU && gScreenToDisplay != DISPLAY_IME)     // 1of11 .. don't close the menu
                 gRequestDisplayScreen = DISPLAY_MAIN;
         }
 
@@ -166,7 +166,7 @@ void GENERIC_Key_PTT(bool bKeyPressed) {
         return;
     }
 
-    if (gScreenToDisplay != DISPLAY_MENU)     // 1of11 .. don't close the menu
+    if (gScreenToDisplay != DISPLAY_MENU && gScreenToDisplay != DISPLAY_IME)     // 1of11 .. don't close the menu
         gRequestDisplayScreen = DISPLAY_MAIN;
 
 
@@ -213,7 +213,7 @@ void GENERIC_Key_PTT(bool bKeyPressed) {
 
     done:
     gPttDebounceCounter = 0;
-    if (gScreenToDisplay != DISPLAY_MENU
+    if (gScreenToDisplay != DISPLAY_MENU && gScreenToDisplay != DISPLAY_IME
 #ifdef ENABLE_FMRADIO
         && gRequestDisplayScreen != DISPLAY_FM
 #endif
