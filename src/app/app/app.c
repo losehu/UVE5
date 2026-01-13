@@ -1818,7 +1818,8 @@ static void ProcessKey(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
                 gPttWasReleased = true;
         }
 #endif
-    } else if (Key != KEY_SIDE1 && Key != KEY_SIDE2 && gScreenToDisplay != DISPLAY_INVALID) {
+    } else if (gScreenToDisplay != DISPLAY_INVALID &&
+               (gScreenToDisplay == DISPLAY_IME || (Key != KEY_SIDE1 && Key != KEY_SIDE2))) {
         ProcessKeysFunctions[gScreenToDisplay](Key, bKeyPressed, bKeyHeld);
     } else if (!SCANNER_IsScanning()
 #ifdef ENABLE_AIRCOPY

@@ -85,6 +85,13 @@ static bool PINYIN_GetFlatEntry(uint8_t start, uint8_t end, uint16_t flat_index,
 }
 #endif
 
+static void UI_InvertBlock(uint8_t row, uint8_t x, uint8_t width)
+{
+    for (uint8_t i = 0; i < width; ++i) {
+        gFrameBuffer[row][x + i] ^= 0xFF;
+    }
+}
+
 void UI_DisplayIme(void) {
     const unsigned int menu_item_x1 = 12;
     const unsigned int menu_item_x2 = LCD_WIDTH - 1;
@@ -143,30 +150,48 @@ void UI_DisplayIme(void) {
 
             if (INPUT_STAGE >= 1) {
                 if (PINYIN_SEARCH_MODE == 1) {
-                    uint8_t num = (PINYIN_NUM_SELECT) / 3;
-                    if ((PINYIN_NOW_NUM + 2) / 3 > 1 + num)memcpy(&gFrameBuffer[1][123], BITMAP_ARRAY_DOWN, 5);
+                    uint8_t num = PINYIN_NUM_SELECT / 6;
+                    if ((PINYIN_NOW_NUM + 5) / 6 > 1 + num)memcpy(&gFrameBuffer[1][123], BITMAP_ARRAY_DOWN, 5);
                     if (num)memcpy(&gFrameBuffer[0][123], BITMAP_ARRAY_UP, 5);
 
-                    uint8_t HAVE_PINYIN = PINYIN_NOW_NUM - num * 3 > 3 ? 3 : PINYIN_NOW_NUM - num * 3;
+                    uint8_t HAVE_PINYIN = PINYIN_NOW_NUM - num * 6 > 6 ? 6 : PINYIN_NOW_NUM - num * 6;
+                    char line0[19] = {0};
+                    char line1[19] = {0};
+                    uint8_t have_row0 = HAVE_PINYIN > 3 ? 3 : HAVE_PINYIN;
+                    uint8_t have_row1 = HAVE_PINYIN > 3 ? HAVE_PINYIN - 3 : 0;
                     for (int j = 0; j < HAVE_PINYIN; ++j) {
                         PINYIN_Read(
-                                PINYIN_NOW_INDEX * 128 + 0X20000 + 16 + num * 3 * 16 +
+                                PINYIN_NOW_INDEX * 128 + 0X20000 + 16 + num * 6 * 16 +
                                 j * 16, tmp, 6);
-                        memcpy(&String[6 * j], tmp, 6);
+                        if (j < 3) {
+                            memcpy(&line0[6 * j], tmp, 6);
+                        } else {
+                            memcpy(&line1[6 * (j - 3)], tmp, 6);
+                        }
                     }
-                    String[6 * HAVE_PINYIN] = 0;
-                    UI_PrintStringSmall(String, 0, 0, 0);
+                    if (have_row0 > 0) {
+                        line0[6 * have_row0] = 0;
+                        UI_PrintStringSmall(line0, 0, 0, 0);
+                    }
+                    if (have_row1 > 0) {
+                        line1[6 * have_row1] = 0;
+                        UI_PrintStringSmall(line1, 0, 0, 1);
+                    }
                 } else if (PINYIN_SEARCH_MODE == 2) {
                     uint16_t total = PINYIN_CountRange(PINYIN_START_INDEX, PINYIN_END_INDEX);
                     if (total) {
                         uint16_t flat_index = PINYIN_FlatIndex(PINYIN_START_INDEX, PINYIN_NOW_INDEX, PINYIN_NUM_SELECT);
-                        uint16_t page = flat_index / 3;
-                        uint16_t page_start = page * 3;
-                        uint16_t total_pages = (total + 2) / 3;
-                        uint8_t HAVE_PINYIN = total - page_start > 3 ? 3 : (uint8_t)(total - page_start);
+                        uint16_t page = flat_index / 6;
+                        uint16_t page_start = page * 6;
+                        uint16_t total_pages = (total + 5) / 6;
+                        uint8_t HAVE_PINYIN = total - page_start > 6 ? 6 : (uint8_t)(total - page_start);
                         if (page + 1 < total_pages)memcpy(&gFrameBuffer[1][123], BITMAP_ARRAY_DOWN, 5);
                         if (page)memcpy(&gFrameBuffer[0][123], BITMAP_ARRAY_UP, 5);
 
+                        char line0[19] = {0};
+                        char line1[19] = {0};
+                        uint8_t have_row0 = HAVE_PINYIN > 3 ? 3 : HAVE_PINYIN;
+                        uint8_t have_row1 = HAVE_PINYIN > 3 ? HAVE_PINYIN - 3 : 0;
                         for (uint8_t j = 0; j < HAVE_PINYIN; ++j) {
                             uint8_t entry_index = 0;
                             uint8_t entry_offset = 0;
@@ -175,22 +200,38 @@ void UI_DisplayIme(void) {
                                 PINYIN_Read(
                                         entry_index * 128 + 0X20000 + 16 + entry_offset * 16,
                                         tmp, 6);
-                                memcpy(&String[6 * j], tmp, 6);
+                                if (j < 3) {
+                                    memcpy(&line0[6 * j], tmp, 6);
+                                } else {
+                                    memcpy(&line1[6 * (j - 3)], tmp, 6);
+                                }
                             }
                         }
-                        String[6 * HAVE_PINYIN] = 0;
-                        UI_PrintStringSmall(String, 0, 0, 0);
+                        if (have_row0 > 0) {
+                            line0[6 * have_row0] = 0;
+                            UI_PrintStringSmall(line0, 0, 0, 0);
+                        }
+                        if (have_row1 > 0) {
+                            line1[6 * have_row1] = 0;
+                            UI_PrintStringSmall(line1, 0, 0, 1);
+                        }
                     }
                 }
             }
             if (INPUT_STAGE == 2) {
                 if (PINYIN_SEARCH_MODE == 1 || PINYIN_SEARCH_MODE == 2) {
-                    uint8_t pos = PINYIN_NUM_SELECT % 3;
                     if (PINYIN_SEARCH_MODE == 2) {
                         uint16_t flat_index = PINYIN_FlatIndex(PINYIN_START_INDEX, PINYIN_NOW_INDEX, PINYIN_NUM_SELECT);
-                        pos = flat_index % 3;
+                        uint8_t pos = flat_index % 6;
+                        uint8_t row = pos / 3;
+                        uint8_t col = pos % 3;
+                        UI_InvertBlock(row, col * 7 * 6, 7 * 6);
+                    } else {
+                        uint8_t pos = PINYIN_NUM_SELECT % 6;
+                        uint8_t row = pos / 3;
+                        uint8_t col = pos % 3;
+                        UI_InvertBlock(row, col * 7 * 6, 7 * 6);
                     }
-                    memcpy(&gFrameBuffer[1][pos * 7 * 6], BITMAP_ARRAY_UP, 5);
 
                     uint8_t SHOW_NUM =
                             CHN_NOW_NUM - CHN_NOW_PAGE * 6 > 6 ? 6 : CHN_NOW_NUM - CHN_NOW_PAGE * 6;

@@ -86,6 +86,62 @@ static void PINYIN_ReadHeader(uint8_t index, uint32_t *code, uint8_t *num)
     }
 }
 
+static uint8_t PINYIN_ReadCount(uint8_t index)
+{
+    uint8_t num = 0;
+
+    PINYIN_ReadHeader(index, NULL, &num);
+    return num;
+}
+
+static uint16_t PINYIN_CountRange(uint8_t start, uint8_t end)
+{
+    uint16_t total = 0;
+
+    if (end < start) {
+        return 0;
+    }
+    for (uint8_t i = start; i <= end; ++i) {
+        total += PINYIN_ReadCount(i);
+    }
+    return total;
+}
+
+static uint16_t PINYIN_FlatIndex(uint8_t start, uint8_t index, uint8_t offset)
+{
+    uint16_t total = 0;
+
+    if (index < start) {
+        return 0;
+    }
+    for (uint8_t i = start; i < index; ++i) {
+        total += PINYIN_ReadCount(i);
+    }
+    total += offset;
+    return total;
+}
+
+static bool PINYIN_GetFlatEntry(uint8_t start, uint8_t end, uint16_t flat_index, uint8_t *entry_index, uint8_t *entry_offset)
+{
+    if (end < start) {
+        return false;
+    }
+    for (uint8_t i = start; i <= end; ++i) {
+        uint8_t count = PINYIN_ReadCount(i);
+        if (flat_index < count) {
+            if (entry_index != NULL) {
+                *entry_index = i;
+            }
+            if (entry_offset != NULL) {
+                *entry_offset = (uint8_t)flat_index;
+            }
+            return true;
+        }
+        flat_index -= count;
+    }
+    return false;
+}
+
 static void PINYIN_SOLVE(uint32_t tmp) {
     if (INPUT_STAGE == 0) {
         INPUT_STAGE = 1;
@@ -697,6 +753,83 @@ static void IME_Key_F(bool bKeyPressed, bool bKeyHeld) {
     }
 }
 
+static void IME_Key_SidePage(bool bKeyPressed, bool bKeyHeld, int8_t direction) {
+    if (bKeyHeld || !bKeyPressed || !gImeActive)
+        return;
+#ifdef ENABLE_PINYIN
+    if (INPUT_MODE != 0 || INPUT_STAGE < 1 || PINYIN_SEARCH_MODE == 0) {
+        return;
+    }
+
+    const uint8_t page_size = 6;
+    bool changed = false;
+
+    if (PINYIN_SEARCH_MODE == 1) {
+        const uint8_t total = PINYIN_NOW_NUM;
+        if (total == 0) {
+            return;
+        }
+        const uint8_t total_pages = (total + page_size - 1) / page_size;
+        if (total_pages <= 1) {
+            return;
+        }
+        const uint8_t page = PINYIN_NUM_SELECT / page_size;
+        uint8_t pos = PINYIN_NUM_SELECT % page_size;
+        uint8_t new_page = (direction > 0) ? (uint8_t)((page + 1) % total_pages)
+                                           : (uint8_t)((page == 0) ? (total_pages - 1) : (page - 1));
+        uint8_t start = new_page * page_size;
+        uint8_t avail = total - start;
+        if (pos >= avail) {
+            pos = (uint8_t)(avail - 1);
+        }
+        uint8_t new_select = start + pos;
+        if (new_select != PINYIN_NUM_SELECT) {
+            PINYIN_NUM_SELECT = new_select;
+            if (INPUT_STAGE == 2) {
+                UPDATE_CHN();
+            }
+            changed = true;
+        }
+    } else if (PINYIN_SEARCH_MODE == 2) {
+        const uint16_t total = PINYIN_CountRange(PINYIN_START_INDEX, PINYIN_END_INDEX);
+        if (total == 0) {
+            return;
+        }
+        const uint16_t total_pages = (total + page_size - 1) / page_size;
+        if (total_pages <= 1) {
+            return;
+        }
+        const uint16_t flat_index = PINYIN_FlatIndex(PINYIN_START_INDEX, PINYIN_NOW_INDEX, PINYIN_NUM_SELECT);
+        const uint16_t page = flat_index / page_size;
+        uint16_t pos = flat_index % page_size;
+        uint16_t new_page = (direction > 0) ? (uint16_t)((page + 1) % total_pages)
+                                            : (uint16_t)((page == 0) ? (total_pages - 1) : (page - 1));
+        uint16_t start = new_page * page_size;
+        uint16_t avail = total - start;
+        if (pos >= avail) {
+            pos = avail - 1;
+        }
+        uint16_t target = start + pos;
+        uint8_t entry_index = 0;
+        uint8_t entry_offset = 0;
+        if (PINYIN_GetFlatEntry(PINYIN_START_INDEX, PINYIN_END_INDEX, target, &entry_index, &entry_offset)) {
+            PINYIN_NOW_INDEX = entry_index;
+            PINYIN_NUM_SELECT = entry_offset;
+            PINYIN_ReadHeader(PINYIN_NOW_INDEX, NULL, &PINYIN_NOW_NUM);
+            if (INPUT_STAGE == 2) {
+                UPDATE_CHN();
+            }
+            changed = true;
+        }
+    }
+
+    if (changed) {
+        gBeepToPlay = BEEP_1KHZ_60MS_OPTIONAL;
+        gRequestDisplayScreen = DISPLAY_IME;
+    }
+#endif
+}
+
 void IME_ProcessKeys(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
     if (!gImeActive)
         return;
@@ -730,6 +863,12 @@ void IME_ProcessKeys(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
             break;
         case KEY_F:
             IME_Key_F(bKeyPressed, bKeyHeld);
+            break;
+        case KEY_SIDE1:
+            IME_Key_SidePage(bKeyPressed, bKeyHeld, -1);
+            break;
+        case KEY_SIDE2:
+            IME_Key_SidePage(bKeyPressed, bKeyHeld, 1);
             break;
         default:
             if (!bKeyHeld && bKeyPressed)
