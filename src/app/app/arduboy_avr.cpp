@@ -33,6 +33,8 @@ static bool gArduboyAvrInitialized = false;
 static bool gArduboyAvrFrameReady = false;
 static bool gArduboyAvrHasFrame = false;
 static uint8_t gArduboyAvrButtons = 0;
+static const char kArduboyAvrFxWarning[] = "Needs Arduboy FX / EXIT=BACK";
+static const char *gArduboyAvrMenuWarning = NULL;
 
 enum ArduboyAvrMode {
     ARDUBOY_AVR_MODE_MENU = 0,
@@ -43,6 +45,14 @@ static ArduboyAvrMode gArduboyAvrMode = ARDUBOY_AVR_MODE_MENU;
 static int gArduboyAvrSelected = 0;
 
 static void ArduboyAvrStartGame(int index);
+
+static void ArduboyAvrSetMenuWarning(const char *warning) {
+    if (gArduboyAvrMenuWarning == warning) {
+        return;
+    }
+    gArduboyAvrMenuWarning = warning;
+    gUpdateDisplay = true;
+}
 
 static void ArduboyAvrClampSelection(void) {
     if (gArduboyAvrRomCount == 0) {
@@ -251,6 +261,7 @@ void ARDUBOY_AVR_Enter(void) {
     ArduboyAvrUpdateButtons();
     gArduboyAvrMode = ARDUBOY_AVR_MODE_MENU;
     ArduboyAvrClampSelection();
+    ArduboyAvrSetMenuWarning(NULL);
 
     gArduboyAvrHasFrame = false;
     gArduboyAvrFrameReady = false;
@@ -264,6 +275,7 @@ void ARDUBOY_AVR_ExitToMain(void) {
     gArduboyAvrButtons = 0;
     ArduboyAvrUpdateButtons();
     gArduboyAvrMode = ARDUBOY_AVR_MODE_MENU;
+    ArduboyAvrSetMenuWarning(NULL);
     gRequestDisplayScreen = DISPLAY_MAIN;
     gUpdateDisplay = true;
 }
@@ -321,16 +333,22 @@ void ARDUBOY_AVR_ProcessKeys(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
         if (Key == KEY_2) {
             gArduboyAvrSelected--;
             ArduboyAvrClampSelection();
+            ArduboyAvrSetMenuWarning(NULL);
             gUpdateDisplay = true;
             return;
         }
         if (Key == KEY_8) {
             gArduboyAvrSelected++;
             ArduboyAvrClampSelection();
+            ArduboyAvrSetMenuWarning(NULL);
             gUpdateDisplay = true;
             return;
         }
         if (Key == KEY_UP) {
+            if (gArduboyAvrRoms[gArduboyAvrSelected].needs_fx) {
+                ArduboyAvrSetMenuWarning(kArduboyAvrFxWarning);
+                return;
+            }
             ArduboyAvrStartGame(gArduboyAvrSelected);
             return;
         }
@@ -391,13 +409,21 @@ static void ArduboyAvrRenderMenu(void) {
     for (int i = 0; i < lines; ++i) {
         const int index = start + i;
         char line[20];
-        snprintf(line, sizeof(line), "%c%s",
-                 (index == gArduboyAvrSelected) ? '>' : ' ',
-                 gArduboyAvrRoms[index].name);
+        const bool needs_fx = gArduboyAvrRoms[index].needs_fx;
+        if (needs_fx) {
+            snprintf(line, sizeof(line), "%c%s (FX)",
+                     (index == gArduboyAvrSelected) ? '>' : ' ',
+                     gArduboyAvrRoms[index].name);
+        } else {
+            snprintf(line, sizeof(line), "%c%s",
+                     (index == gArduboyAvrSelected) ? '>' : ' ',
+                     gArduboyAvrRoms[index].name);
+        }
         UI_PrintStringSmall(line, 0, 127, static_cast<uint8_t>(i + 1));
     }
 
-    UI_PrintStringSmall("EXIT=BACK", 0, 127, 6);
+    const char *footer = gArduboyAvrMenuWarning ? gArduboyAvrMenuWarning : "EXIT=BACK";
+    UI_PrintStringSmall(footer, 0, 127, 6);
     ST7565_BlitStatusLine();
     ST7565_BlitFullScreen();
 }
@@ -410,6 +436,11 @@ static void ArduboyAvrStartGame(int index) {
         return;
     }
     if (!ArduboyAvrInit()) {
+        return;
+    }
+    if (gArduboyAvrRoms[index].needs_fx) {
+        ArduboyAvrSetMenuWarning(kArduboyAvrFxWarning);
+        gArduboyAvrMode = ARDUBOY_AVR_MODE_MENU;
         return;
     }
 

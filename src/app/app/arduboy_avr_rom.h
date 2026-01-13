@@ -6,9 +6,12 @@
 extern "C" {
 #endif
 
+#include <stdbool.h>
+
 typedef struct {
     const char *name;
     const char *hex;
+    bool needs_fx;
 } ArduboyAvrRom;
 
 extern const ArduboyAvrRom gArduboyAvrRoms[];
