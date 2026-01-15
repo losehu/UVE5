@@ -59,6 +59,27 @@ static KEY_Code_t MapOpenCVKey(int key)
     if (key == GLFW_KEY_EQUAL) {
         return KEY_STAR;
     }
+    // PC-friendly controls for Arduboy AVR:
+    // - WASD: D-pad (maps to 2/4/6/8)
+    // - J/K: A/B (maps to B/C)
+    if (key == GLFW_KEY_W) {
+        return KEY_2;
+    }
+    if (key == GLFW_KEY_S) {
+        return KEY_8;
+    }
+    if (key == GLFW_KEY_A) {
+        return KEY_4;
+    }
+    if (key == GLFW_KEY_D) {
+        return KEY_6;
+    }
+    if (key == GLFW_KEY_J) {
+        return KEY_UP;
+    }
+    if (key == GLFW_KEY_K) {
+        return KEY_DOWN;
+    }
     if (key == GLFW_KEY_UP) {
         return KEY_UP;
     }

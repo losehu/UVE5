@@ -71,8 +71,8 @@ static bool gArduboyAvrHasFrame = false;
 static bool gArduboyAvrFirstFrameLogged = false;
 static int gArduboyAvrLastCpuState = -1;
 static uint8_t gArduboyAvrButtons = 0;
-static const char kArduboyAvrFxWarning[] = "FX data missing / EXIT=BACK";
-static const char kArduboyAvrCpuHaltWarning[] = "ROM halted / EXIT=BACK";
+static const char kArduboyAvrFxWarning[] = "FX data missing";
+static const char kArduboyAvrCpuHaltWarning[] = "ROM halted";
 static const char *gArduboyAvrMenuWarning = NULL;
 
 static bool gArduboyAvrFxReady = false;
@@ -1186,7 +1186,16 @@ static uint8_t ArduboyAvrMapKey(KEY_Code_t key) {
 
 void ARDUBOY_AVR_ProcessKeys(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
     if (Key == KEY_EXIT && !bKeyPressed) {
-        ARDUBOY_AVR_ExitToMain();
+        // In-game EXIT returns to the ROM list; EXIT on the list returns to the main UI.
+        if (gArduboyAvrMode == ARDUBOY_AVR_MODE_GAME) {
+            gArduboyAvrButtons = 0;
+            ArduboyAvrUpdateButtons();
+            gArduboyAvrMode = ARDUBOY_AVR_MODE_MENU;
+            ArduboyAvrSetMenuWarning(NULL);
+            gUpdateDisplay = true;
+        } else {
+            ARDUBOY_AVR_ExitToMain();
+        }
         return;
     }
 
@@ -1242,11 +1251,10 @@ static void ArduboyAvrRenderBlank(void) {
 static void ArduboyAvrRenderMenu(void) {
     memset(gStatusLine, 0, sizeof(gStatusLine));
     UI_DisplayClear();
-    UI_PrintStringSmall("Arduboy AVR", 0, 127, 0);
 
     if (gArduboyAvrRomCount == 0) {
+        UI_PrintStringSmall("Arduboy AVR", 0, 127, 0);
         UI_PrintStringSmall("No ROMs", 0, 127, 2);
-        UI_PrintStringSmall("EXIT=BACK", 0, 127, 6);
         ST7565_BlitStatusLine();
         ST7565_BlitFullScreen();
         return;
@@ -1266,24 +1274,40 @@ static void ArduboyAvrRenderMenu(void) {
     }
 
     const int lines = (total < window) ? total : window;
-    for (int i = 0; i < lines; ++i) {
-        const int index = start + i;
-        char line[20];
-        const bool needs_fx = gArduboyAvrRoms[index].needs_fx;
-        if (needs_fx) {
-            snprintf(line, sizeof(line), "%c%s (FX)",
-                     (index == gArduboyAvrSelected) ? '>' : ' ',
-                     gArduboyAvrRoms[index].name);
-        } else {
-            snprintf(line, sizeof(line), "%c%s",
-                     (index == gArduboyAvrSelected) ? '>' : ' ',
-                     gArduboyAvrRoms[index].name);
-        }
-        UI_PrintStringSmall(line, 0, 127, static_cast<uint8_t>(i + 1));
+    const bool has_prev = (start > 0);
+    const bool has_next = (start + lines < total);
+
+    // Header with scroll indicators.
+    UI_PrintStringSmall("Arduboy AVR", 8, 119, 0);
+    if (has_prev) {
+        UI_PrintStringSmall("^", 0, 0, 0);
+    }
+    if (has_next) {
+        UI_PrintStringSmall("v", LCD_WIDTH - 7, 0, 0);
     }
 
-    const char *footer = gArduboyAvrMenuWarning ? gArduboyAvrMenuWarning : "EXIT=BACK";
-    UI_PrintStringSmall(footer, 0, 127, 6);
+    for (int i = 0; i < lines; ++i) {
+        const int index = start + i;
+        char line[32];
+        const char *name = gArduboyAvrRoms[index].name ? gArduboyAvrRoms[index].name : "(null)";
+        const bool needs_fx = gArduboyAvrRoms[index].needs_fx;
+        if (needs_fx) {
+            snprintf(line, sizeof(line), "%s (FX)", name);
+        } else {
+            snprintf(line, sizeof(line), "%s", name);
+        }
+        const uint8_t row = static_cast<uint8_t>(i + 1);
+        UI_PrintStringSmall(line, 0, 127, row);
+        if (index == gArduboyAvrSelected) {
+            for (uint8_t x = 0; x < LCD_WIDTH; ++x) {
+                gFrameBuffer[row][x] ^= 0xFF;
+            }
+        }
+    }
+
+    if (gArduboyAvrMenuWarning) {
+        UI_PrintStringSmall(gArduboyAvrMenuWarning, 0, 127, 6);
+    }
     ST7565_BlitStatusLine();
     ST7565_BlitFullScreen();
 }
