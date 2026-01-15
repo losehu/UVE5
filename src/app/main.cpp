@@ -4,6 +4,7 @@
 #include "esp_partition.h"
 #else
 #include "opencv/Arduino.hpp"
+#include <cstdlib>
 #endif
 #include "../lib/shared_flash.h"
 #include "app/si.h"
@@ -80,6 +81,10 @@
 #include "ui/menu.h"
 #include "driver/eeprom.h"
 #include "driver/st7565.h"
+
+#ifdef ENABLE_ARDUBOY_AVR
+#include "app/arduboy_avr.h"
+#endif
 
 
 
@@ -187,6 +192,17 @@ void loop() {
     gpio_set_level(GPIOA_PIN_VOICE_0 , 0);
 
     gUpdateStatus = true;
+
+#if defined(ENABLE_OPENCV) && defined(ENABLE_ARDUBOY_AVR)
+    {
+        static bool did_autorun = false;
+        const char *env = std::getenv("UVE5_ARDUBOY_AVR_AUTORUN");
+        if (!did_autorun && env && env[0] != '\0' && env[0] != '0') {
+            did_autorun = true;
+            ARDUBOY_AVR_Enter();
+        }
+    }
+#endif
 
 #ifdef ENABLE_VOICE
     {

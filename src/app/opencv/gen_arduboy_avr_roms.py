@@ -5,11 +5,6 @@ from pathlib import Path
 import re
 import sys
 
-FX_IDENTIFIER_VALUES = {0x9F, 0xAB}
-FX_DATA_VALUES = {0x03, 0x0B, 0x06, 0x04, 0x05, 0xB9}
-MAX_ROM_SIZE = 0x20000
-
-
 def _sanitize_symbol(name: str) -> str:
     safe = re.sub(r"[^A-Za-z0-9_]", "_", name)
     if not safe:
@@ -88,56 +83,6 @@ def _write_source(path: Path, roms: list[tuple[str, str, bool]]) -> None:
     path.write_text("\n".join(lines), encoding="ascii")
 
 
-def _collect_hex_bytes(hex_text: str) -> tuple[bytearray, int]:
-    mem = bytearray([0xFF] * MAX_ROM_SIZE)
-    max_addr = 0
-    segment = 0
-
-    for line in hex_text.splitlines():
-        line = line.strip()
-        if not line or line[0] != ":":
-            continue
-        record = bytes.fromhex(line[1:])
-        count = record[0]
-        addr = (record[1] << 8) | record[2]
-        rectype = record[3]
-        if rectype == 0x00:
-            start = segment + addr
-            end = start + count
-            if end > len(mem):
-                raise ValueError("HEX contains code beyond supported flash range")
-            mem[start:end] = record[4:4 + count]
-            if end > max_addr:
-                max_addr = end
-        elif rectype == 0x01:
-            break
-        elif rectype == 0x02:
-            if count >= 2:
-                segment = ((record[4] << 8) | record[5]) << 4
-        elif rectype == 0x04:
-            if count >= 2:
-                segment = ((record[4] << 8) | record[5]) << 16
-    return mem, max_addr
-
-
-def _detect_fx_rom(hex_text: str) -> bool:
-    mem, max_addr = _collect_hex_bytes(hex_text)
-    found_identifiers = set()
-    found_data = set()
-
-    for i in range(0, max_addr - 1):
-        word = mem[i] | (mem[i + 1] << 8)
-        if (word & 0xF000) != 0xE000:
-            continue
-        immediate = ((word >> 4) & 0xF0) | (word & 0x0F)
-        if immediate in FX_IDENTIFIER_VALUES:
-            found_identifiers.add(immediate)
-        if immediate in FX_DATA_VALUES:
-            found_data.add(immediate)
-
-    return bool(found_identifiers) and bool(found_data)
-
-
 def main() -> int:
     root = Path(__file__).resolve().parents[3]
     games_dir = root / "src" / "app" / "opencv" / "game"
@@ -152,7 +97,8 @@ def main() -> int:
     for path in sorted(games_dir.glob("*.hex")):
         name = path.stem
         text = path.read_text(encoding="ascii", errors="ignore")
-        roms.append((name, text, _detect_fx_rom(text)))
+        needs_fx = path.with_suffix(".bin").exists()
+        roms.append((name, text, needs_fx))
 
     _write_header(out_h)
     _write_source(out_c, roms)

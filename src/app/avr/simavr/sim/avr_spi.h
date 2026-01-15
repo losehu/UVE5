@@ -46,6 +46,7 @@ typedef struct avr_spi_t {
 	avr_io_addr_t	r_spdr;			// data register
 	avr_io_addr_t	r_spcr;			// control register
 	avr_io_addr_t	r_spsr;			// status register
+	uint8_t			spif_read;		// SPSR read while SPIF was set (for correct SPIF clearing)
 
 	avr_regbit_t spe;		// spi enable
 	avr_regbit_t mstr;		// master/slave

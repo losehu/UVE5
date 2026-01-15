@@ -34,8 +34,10 @@ avr_spi_raise(
 	if (avr_regbit_get(avr, p->spe)) {
 		// in master mode, any byte is sent as it comes..
 		if (avr_regbit_get(avr, p->mstr)) {
-			avr_raise_interrupt(avr, &p->spi);
 			avr_raise_irq(p->io.irq + SPI_IRQ_OUTPUT, avr->data[p->r_spdr]);
+			// External peripherals write the received byte into SPDR via SPI_IRQ_INPUT.
+			// Raise SPIF/interrupt only after that, so polling/ISRs observe the correct value.
+			avr_raise_interrupt(avr, &p->spi);
 		}
 	}
 	return 0;
@@ -50,8 +52,32 @@ avr_spi_read(
 	avr_spi_t * p = (avr_spi_t *)param;
 	uint8_t v = avr_core_watch_read(avr, addr);
 
-	avr_regbit_clear(avr, p->spi.raised);
+	/*
+	 * SPIF is cleared by first reading SPSR (with SPIF set) and then
+	 * accessing SPDR. Some Arduboy sketches read SPDR before SPSR while
+	 * polling, which is valid on real hardware but would deadlock if we
+	 * cleared SPIF unconditionally here.
+	 */
+	if (p->spif_read) {
+		avr_regbit_clear(avr, p->spi.raised);
+		p->spif_read = 0;
+	}
 //	printf("avr_spi_read = %02x\n", v);
+	return v;
+}
+
+static uint8_t
+avr_spi_spsr_read(
+		struct avr_t * avr,
+		avr_io_addr_t addr,
+		void * param)
+{
+	avr_spi_t * p = (avr_spi_t *)param;
+	uint8_t v = avr_core_watch_read(avr, addr);
+	// Mark that SPSR was read while SPIF was set so the next SPDR read clears it.
+	if (avr_regbit_get(avr, p->spi.raised)) {
+		p->spif_read = 1;
+	}
 	return v;
 }
 
@@ -69,6 +95,7 @@ avr_spi_write(
 	if (addr == p->r_spdr) {
 		/* Clear the SPIF bit. See ATmega164/324/644 manual, Section 18.5.2. */
 		avr_regbit_clear(avr, p->spi.raised);
+		p->spif_read = 0;
 
 		avr_core_watch_write(avr, addr, v);
 		uint16_t clock_shift = _avr_spi_clkdiv[avr->data[p->r_spcr]&0b11];
@@ -95,6 +122,12 @@ avr_spi_irq_input(
 		return;
 
 	avr_core_watch_write(avr, p->r_spdr, value);
+
+	// In master mode the transfer-complete interrupt is raised by avr_spi_raise().
+	// Here we only latch the received byte.
+	if (avr_regbit_get(avr, p->mstr))
+		return;
+
 	avr_raise_interrupt(avr, &p->spi);
 
 	// if in slave mode,
@@ -129,6 +162,7 @@ avr_spi_init(
 		avr_spi_t * p)
 {
 	p->io = _io;
+	p->spif_read = 0;
 
 	avr_register_io(avr, &p->io);
 	avr_register_vector(avr, &p->spi);
@@ -137,4 +171,5 @@ avr_spi_init(
 
 	avr_register_io_write(avr, p->r_spdr, avr_spi_write, p);
 	avr_register_io_read(avr, p->r_spdr, avr_spi_read, p);
+	avr_register_io_read(avr, p->r_spsr, avr_spi_spsr_read, p);
 }
