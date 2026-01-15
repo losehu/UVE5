@@ -500,7 +500,17 @@ static void IME_Key_0_to_9(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
 }
 
 static void IME_Key_MENU(const bool bKeyPressed, const bool bKeyHeld) {
-    if (bKeyHeld || !bKeyPressed || !gImeActive)
+    if (!gImeActive)
+        return;
+
+    // Long-press MENU to skip remaining character slots and jump to confirmation.
+    if (bKeyHeld && bKeyPressed) {
+        gBeepToPlay = BEEP_1KHZ_60MS_OPTIONAL;
+        IME_Finish(true);
+        return;
+    }
+
+    if (bKeyHeld || !bKeyPressed)
         return;
     gBeepToPlay = BEEP_1KHZ_60MS_OPTIONAL;
     gRequestDisplayScreen = DISPLAY_IME;

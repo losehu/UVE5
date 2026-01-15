@@ -15,8 +15,11 @@
 #endif
 
 extern "C" {
+#include "../bitmaps.h"
+#include "../helper/battery.h"
 #include "../driver/st7565.h"
 #include "../misc.h"
+#include "../ui/battery.h"
 #include "../ui/helper.h"
 #include "../ui/ui.h"
 }
@@ -1249,11 +1252,12 @@ static void ArduboyAvrRenderBlank(void) {
 }
 
 static void ArduboyAvrRenderMenu(void) {
-    memset(gStatusLine, 0, sizeof(gStatusLine));
     UI_DisplayClear();
 
     if (gArduboyAvrRomCount == 0) {
-        UI_PrintStringSmall("Arduboy AVR", 0, 127, 0);
+        memset(gStatusLine, 0, sizeof(gStatusLine));
+        UI_PrintStringSmallBuffer("Arduboy AVR", gStatusLine);
+        UI_DrawBattery(gStatusLine + (LCD_WIDTH - sizeof(BITMAP_BatteryLevel1)), gBatteryDisplayLevel, gLowBatteryBlink);
         UI_PrintStringSmall("No ROMs", 0, 127, 2);
         ST7565_BlitStatusLine();
         ST7565_BlitFullScreen();
@@ -1261,7 +1265,7 @@ static void ArduboyAvrRenderMenu(void) {
     }
 
     const int total = static_cast<int>(gArduboyAvrRomCount);
-    const int window = 5;
+    const int window = 6;
     int start = 0;
     if (total > window) {
         start = gArduboyAvrSelected - window / 2;
@@ -1277,14 +1281,30 @@ static void ArduboyAvrRenderMenu(void) {
     const bool has_prev = (start > 0);
     const bool has_next = (start + lines < total);
 
-    // Header with scroll indicators.
-    UI_PrintStringSmall("Arduboy AVR", 8, 119, 0);
+    // Title bar: label + page arrows + battery.
+    memset(gStatusLine, 0, sizeof(gStatusLine));
+    UI_PrintStringSmallBuffer("Arduboy AVR", gStatusLine);
+    UI_DrawBattery(gStatusLine + (LCD_WIDTH - sizeof(BITMAP_BatteryLevel1)), gBatteryDisplayLevel, gLowBatteryBlink);
+#ifdef ENABLE_PINYIN
+    {
+        uint8_t x = static_cast<uint8_t>(LCD_WIDTH - sizeof(BITMAP_BatteryLevel1));
+        if (has_next) {
+            x = static_cast<uint8_t>(x - sizeof(BITMAP_ARRAY_DOWN));
+            memcpy(gStatusLine + x, BITMAP_ARRAY_DOWN, sizeof(BITMAP_ARRAY_DOWN));
+        }
+        if (has_prev) {
+            x = static_cast<uint8_t>(x - sizeof(BITMAP_ARRAY_UP));
+            memcpy(gStatusLine + x, BITMAP_ARRAY_UP, sizeof(BITMAP_ARRAY_UP));
+        }
+    }
+#else
     if (has_prev) {
-        UI_PrintStringSmall("^", 0, 0, 0);
+        UI_PrintStringSmallBuffer("^", gStatusLine + (LCD_WIDTH - sizeof(BITMAP_BatteryLevel1) - 12));
     }
     if (has_next) {
-        UI_PrintStringSmall("v", LCD_WIDTH - 7, 0, 0);
+        UI_PrintStringSmallBuffer("v", gStatusLine + (LCD_WIDTH - sizeof(BITMAP_BatteryLevel1) - 6));
     }
+#endif
 
     for (int i = 0; i < lines; ++i) {
         const int index = start + i;
@@ -1296,7 +1316,7 @@ static void ArduboyAvrRenderMenu(void) {
         } else {
             snprintf(line, sizeof(line), "%s", name);
         }
-        const uint8_t row = static_cast<uint8_t>(i + 1);
+        const uint8_t row = static_cast<uint8_t>(i);
         UI_PrintStringSmall(line, 0, 127, row);
         if (index == gArduboyAvrSelected) {
             for (uint8_t x = 0; x < LCD_WIDTH; ++x) {
@@ -1306,7 +1326,15 @@ static void ArduboyAvrRenderMenu(void) {
     }
 
     if (gArduboyAvrMenuWarning) {
-        UI_PrintStringSmall(gArduboyAvrMenuWarning, 0, 127, 6);
+        UI_PrintStringSmall(gArduboyAvrMenuWarning, 0, 0, 6);
+    }
+    {
+        char counter[16];
+        snprintf(counter, sizeof(counter), "%d/%d", gArduboyAvrSelected + 1, total);
+        const size_t len = strlen(counter);
+        const size_t width = len * 7;
+        const uint8_t x = (width <= LCD_WIDTH) ? static_cast<uint8_t>(LCD_WIDTH - width) : 0;
+        UI_PrintStringSmallBuffer(counter, gFrameBuffer[6] + x);
     }
     ST7565_BlitStatusLine();
     ST7565_BlitFullScreen();
