@@ -13,7 +13,7 @@
  *     See the License for the specific language governing permissions and
  *     limitations under the License.
  */
-
+#include <Arduino.h>
 #include "battery.h"
 #include "driver/backlight.h"
 #include "driver/st7565.h"
@@ -94,9 +94,8 @@ void BATTERY_GetReadings(const bool bDisplayBatteryLevel) {
     const uint8_t PreviousBatteryLevel = gBatteryDisplayLevel;
     const uint16_t Voltage =
             (gBatteryVoltages[0] + gBatteryVoltages[1] + gBatteryVoltages[2] + gBatteryVoltages[3]) / 4;
-
-    gBatteryVoltageAverage = (Voltage * 760) / gBatteryCalibration[3];
-
+    const uint16_t calibration = (gBatteryCalibration[3] == 0) ? 2000 : gBatteryCalibration[3];
+    gBatteryVoltageAverage = (Voltage * 760) / calibration;
     if (gBatteryVoltageAverage > 890)
         gBatteryDisplayLevel = 7; // battery overvoltage
     else if (gBatteryVoltageAverage < 630)
@@ -113,8 +112,6 @@ void BATTERY_GetReadings(const bool bDisplayBatteryLevel) {
             }
         }
     }
-
-
     if ((gScreenToDisplay == DISPLAY_MENU))
         gUpdateDisplay = true;
 
@@ -134,7 +131,6 @@ void BATTERY_GetReadings(const bool bDisplayBatteryLevel) {
 
         gChargingWithTypeC = true;
     }
-
     if (PreviousBatteryLevel != gBatteryDisplayLevel) {
         if (gBatteryDisplayLevel > 2)
             gLowBatteryConfirmed = false;
@@ -146,7 +142,6 @@ void BATTERY_GetReadings(const bool bDisplayBatteryLevel) {
             if (bDisplayBatteryLevel)
                 UI_DisplayBattery(gBatteryDisplayLevel, gLowBatteryBlink);
         }
-
         if (!gLowBatteryConfirmed)
             gUpdateDisplay = true;
 

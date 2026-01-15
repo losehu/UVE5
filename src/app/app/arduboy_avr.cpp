@@ -3,6 +3,15 @@
 #include "arduboy2.h"
 #include "arduboy_avr_rom.h"
 
+#ifndef ENABLE_OPENCV
+#include <Arduino.h>
+#include <esp_timer.h>
+#include <esp_task_wdt.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
+#include <freertos/task.h>
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -881,6 +890,235 @@ static uint8_t ArduboyAvrReverseBits(uint8_t v) {
     return v;
 }
 
+#ifndef ENABLE_OPENCV
+static const uint8_t *ArduboyAvrByteLut(bool flip_y, bool invert) {
+    static bool inited = false;
+    static uint8_t lut_id[256];
+    static uint8_t lut_rev[256];
+    static uint8_t lut_inv[256];
+    static uint8_t lut_rev_inv[256];
+
+    if (!inited) {
+        for (int i = 0; i < 256; ++i) {
+            const uint8_t v = static_cast<uint8_t>(i);
+            lut_id[i] = v;
+            lut_rev[i] = ArduboyAvrReverseBits(v);
+            lut_inv[i] = static_cast<uint8_t>(~v);
+            lut_rev_inv[i] = static_cast<uint8_t>(~lut_rev[i]);
+        }
+        inited = true;
+    }
+
+    if (flip_y) {
+        return invert ? lut_rev_inv : lut_rev;
+    }
+    return invert ? lut_inv : lut_id;
+}
+#endif
+
+#ifndef ENABLE_OPENCV
+static TaskHandle_t gArduboyAvrTaskHandle = nullptr;
+static volatile bool gArduboyAvrTaskStopRequested = false;
+static SemaphoreHandle_t gArduboyAvrMutex = nullptr;
+static SemaphoreHandle_t gArduboyAvrPresentMutex = nullptr;
+static volatile bool gArduboyAvrPresentPending = false;
+static uint8_t gArduboyAvrPresentStatus[LCD_WIDTH];
+static uint8_t gArduboyAvrPresentFrame[FRAME_LINES][LCD_WIDTH];
+static uint8_t gArduboyAvrPresentDirtyLines = 0; // bit i => line i dirty
+static bool gArduboyAvrPresentDirtyStatus = false;
+
+// Lightweight runtime stats (best-effort, not synchronized).
+static volatile uint64_t gArduboyAvrStatCycles = 0;
+static volatile uint32_t gArduboyAvrStatRunUs = 0;
+static volatile uint32_t gArduboyAvrStatLoopUs = 0;
+static volatile uint32_t gArduboyAvrStatFramesPrepared = 0;
+static volatile uint32_t gArduboyAvrStatFramesPresented = 0;
+
+static inline void ArduboyAvrMutexInitOnce(void) {
+    if (gArduboyAvrMutex) {
+        return;
+    }
+    gArduboyAvrMutex = xSemaphoreCreateMutex();
+}
+
+static inline void ArduboyAvrPresentMutexInitOnce(void) {
+    if (gArduboyAvrPresentMutex) {
+        return;
+    }
+    gArduboyAvrPresentMutex = xSemaphoreCreateMutex();
+}
+
+static inline void ArduboyAvrLock(void) {
+    ArduboyAvrMutexInitOnce();
+    if (gArduboyAvrMutex) {
+        xSemaphoreTake(gArduboyAvrMutex, portMAX_DELAY);
+    }
+}
+
+static inline void ArduboyAvrUnlock(void) {
+    if (gArduboyAvrMutex) {
+        xSemaphoreGive(gArduboyAvrMutex);
+    }
+}
+
+static void ArduboyAvrUpdateButtons(void);
+static bool ArduboyAvrRenderDisplay(void);
+static void ArduboyAvrPreparePresent(void);
+static void ArduboyAvrPrintStatsIfDue(void);
+
+static void ArduboyAvrTaskMain(void *arg) {
+    (void)arg;
+    const int64_t slice_us = 8000; // ~8ms wall-time chunks (avoid WDT / keep system responsive)
+    uint8_t last_buttons = 0;
+    uint32_t last_present_ms = 0;
+    // Prefer game speed over display smoothness on ESP32.
+    static constexpr uint32_t kPresentIntervalMs = 100; // ~10 FPS
+    static constexpr uint32_t kInputBoostIntervalMs = 33; // ~30 FPS
+    static constexpr uint32_t kInputBoostDurationMs = 200;
+    uint32_t input_boost_until_ms = 0;
+    uint32_t last_wdt_kick_ms = 0;
+    uint32_t last_idle_yield_ms = 0;
+    uint32_t tune_start_ms = 0;
+    uint64_t tune_cycles = 0;
+
+    // Register this task with the ESP task watchdog (safe even if WDT is disabled).
+    esp_task_wdt_add(NULL);
+
+    while (!gArduboyAvrTaskStopRequested) {
+        const int64_t loop_start_us = esp_timer_get_time();
+        // Only the emulator task touches simavr state during GAME, so avoid heavy locking here.
+        const bool should_run = gArduboyAvrInitialized && gArduboyAvr &&
+                                (gArduboyAvrMode == ARDUBOY_AVR_MODE_GAME) &&
+                                !gArduboyAvrTaskStopRequested;
+        const uint8_t buttons = gArduboyAvrButtons;
+
+        if (!should_run) {
+            vTaskDelay(pdMS_TO_TICKS(10));
+            continue;
+        }
+
+        if (buttons != last_buttons) {
+            last_buttons = buttons;
+            ArduboyAvrUpdateButtons();
+            // After input, briefly increase present rate to reduce perceived lag.
+            input_boost_until_ms = millis() + kInputBoostDurationMs;
+            // Also allow an immediate present once a frame becomes ready.
+            last_present_ms = 0;
+        }
+
+        const avr_cycle_count_t cycle_start = gArduboyAvr->cycle;
+        const int64_t start_us = esp_timer_get_time();
+        const int64_t deadline_us = start_us + slice_us;
+        uint32_t iter = 0;
+        while ((gArduboyAvr->state == cpu_Running || gArduboyAvr->state == cpu_Sleeping) &&
+               gArduboyAvrMode == ARDUBOY_AVR_MODE_GAME &&
+               !gArduboyAvrTaskStopRequested) {
+            avr_run(gArduboyAvr);
+            if (((++iter) & 0xFFu) == 0) {
+                if (esp_timer_get_time() >= deadline_us) {
+                    break;
+                }
+            }
+        }
+        const int64_t run_us = esp_timer_get_time() - start_us;
+        const avr_cycle_count_t cycle_end = gArduboyAvr->cycle;
+        if (run_us > 0) {
+            gArduboyAvrStatRunUs += static_cast<uint32_t>(run_us);
+        }
+        if (cycle_end >= cycle_start) {
+            const uint64_t delta = static_cast<uint64_t>(cycle_end - cycle_start);
+            gArduboyAvrStatCycles += delta;
+            tune_cycles += delta;
+        }
+
+        if (gArduboyAvr->state == cpu_Done || gArduboyAvr->state == cpu_Crashed) {
+            ArduboyAvrLog(1,
+                          "[arduboy_avr][cpu] halted state=%s; returning to menu\n",
+                          ArduboyAvrCpuStateName(gArduboyAvr->state));
+            ArduboyAvrSetMenuWarning(kArduboyAvrCpuHaltWarning);
+            gArduboyAvrMode = ARDUBOY_AVR_MODE_MENU;
+            gUpdateDisplay = true;
+            vTaskDelay(pdMS_TO_TICKS(10));
+            continue;
+        }
+
+        if (ssd1306_get_flag(&gArduboyDisplay, SSD1306_FLAG_DIRTY)) {
+            gArduboyAvrFrameReady = true;
+            gUpdateDisplay = true;
+        }
+
+        // Auto-tune simulated CPU frequency to match achievable throughput, so the
+        // game "feels" closer to real-time at the cost of emulating an underclocked AVR.
+        // User-requested clamp: 1–2MHz.
+        {
+            const uint32_t now_ms = millis();
+            if (tune_start_ms == 0) {
+                tune_start_ms = now_ms;
+            }
+            const uint32_t elapsed_ms = (uint32_t)(now_ms - tune_start_ms);
+            if (elapsed_ms >= 1000 && gArduboyAvr) {
+                const uint64_t cps = (tune_cycles * 1000ULL) / (elapsed_ms ? elapsed_ms : 1U);
+                uint32_t target_hz = static_cast<uint32_t>(cps);
+                if (target_hz < 1000000U) target_hz = 1000000U;
+                if (target_hz > 2000000U) target_hz = 2000000U;
+                gArduboyAvr->frequency = target_hz;
+                tune_start_ms = now_ms;
+                tune_cycles = 0;
+            }
+        }
+
+        // Prepare a frame for core0 to blit; cap aggressively to keep game speed.
+        const uint32_t now_ms = millis();
+        const uint32_t interval =
+            ((int32_t)(input_boost_until_ms - now_ms) > 0) ? kInputBoostIntervalMs : kPresentIntervalMs;
+        if (gArduboyAvrFrameReady && (uint32_t)(now_ms - last_present_ms) >= interval) {
+            last_present_ms = now_ms;
+            ArduboyAvrPreparePresent();
+        }
+        // If we skip presenting this cycle, keep DIRTY set so we render the newest
+        // frame once the interval elapses (prioritize emulation speed).
+
+        // Prefer throughput: yield without sleeping. To avoid WDT/IDLE starvation,
+        // periodically yield a tick and kick the watchdog.
+        const uint32_t now2_ms = millis();
+        if ((uint32_t)(now2_ms - last_wdt_kick_ms) >= 100) {
+            last_wdt_kick_ms = now2_ms;
+            esp_task_wdt_reset();
+        }
+        if ((uint32_t)(now2_ms - last_idle_yield_ms) >= 50) {
+            last_idle_yield_ms = now2_ms;
+            vTaskDelay(1);
+        } else {
+            taskYIELD();
+        }
+        const int64_t loop_us = esp_timer_get_time() - loop_start_us;
+        if (loop_us > 0) {
+            gArduboyAvrStatLoopUs += static_cast<uint32_t>(loop_us);
+        }
+    }
+
+    gArduboyAvrTaskHandle = nullptr;
+    vTaskDelete(nullptr);
+}
+
+static void ArduboyAvrTaskStartIfNeeded(void) {
+    if (gArduboyAvrTaskHandle) {
+        return;
+    }
+    ArduboyAvrMutexInitOnce();
+    ArduboyAvrPresentMutexInitOnce();
+    gArduboyAvrTaskStopRequested = false;
+    xTaskCreatePinnedToCore(ArduboyAvrTaskMain, "arduboy_avr", 12288, nullptr, 3, &gArduboyAvrTaskHandle, 1);
+}
+
+static void ArduboyAvrTaskStop(void) {
+    if (!gArduboyAvrTaskHandle) {
+        return;
+    }
+    gArduboyAvrTaskStopRequested = true;
+}
+#endif
+
 static void ArduboyAvrUpdateButtons(void) {
     if (!gArduboyAvr) {
         return;
@@ -1058,7 +1296,12 @@ static bool ArduboyAvrInit(void) {
     gArduboyAvrButtons = 0;
     ArduboyAvrUpdateButtons();
     avr_reset(gArduboyAvr);
+#ifndef ENABLE_OPENCV
+    // Reduce overhead of avr_run() calls; we throttle by wall-time in the emu task.
+    gArduboyAvr->run_cycle_limit = 0;
+#else
     gArduboyAvr->run_cycle_limit = 4000;
+#endif
     ssd1306_set_flag(&gArduboyDisplay, SSD1306_FLAG_DIRTY, 1);
 
     gArduboyAvrInitialized = true;
@@ -1119,6 +1362,9 @@ void ARDUBOY_AVR_ExitToMain(void) {
     ArduboyAvrSetMenuWarning(NULL);
     gRequestDisplayScreen = DISPLAY_MAIN;
     gUpdateDisplay = true;
+#ifndef ENABLE_OPENCV
+    ArduboyAvrTaskStop();
+#endif
 }
 
 void ARDUBOY_AVR_TimeSlice10ms(void) {
@@ -1128,6 +1374,12 @@ void ARDUBOY_AVR_TimeSlice10ms(void) {
     if (gArduboyAvrMode != ARDUBOY_AVR_MODE_GAME) {
         return;
     }
+
+#ifndef ENABLE_OPENCV
+    if (gArduboyAvrTaskHandle) {
+        return;
+    }
+#endif
 
     const avr_cycle_count_t target =
         gArduboyAvr->cycle + avr_usec_to_cycles(gArduboyAvr, 10000);
@@ -1237,7 +1489,6 @@ void ARDUBOY_AVR_ProcessKeys(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
     } else {
         gArduboyAvrButtons = static_cast<uint8_t>(gArduboyAvrButtons & ~mask);
     }
-    ArduboyAvrUpdateButtons();
 
     (void)bKeyHeld;
 }
@@ -1391,7 +1642,11 @@ static void ArduboyAvrStartGame(int index) {
     }
 
     avr_reset(gArduboyAvr);
+#ifndef ENABLE_OPENCV
+    gArduboyAvr->run_cycle_limit = 0;
+#else
     gArduboyAvr->run_cycle_limit = 4000;
+#endif
     ssd1306_set_flag(&gArduboyDisplay, SSD1306_FLAG_DIRTY, 1);
 
     gArduboyAvrMode = ARDUBOY_AVR_MODE_GAME;
@@ -1400,41 +1655,182 @@ static void ArduboyAvrStartGame(int index) {
     gArduboyAvrFirstFrameLogged = false;
     gArduboyAvrLastCpuState = -1;
     gUpdateDisplay = true;
+#ifndef ENABLE_OPENCV
+    ArduboyAvrTaskStartIfNeeded();
+#endif
 
     ArduboyAvrLog(1,
                   "[arduboy_avr][rom] entered GAME mode name='%s'\n",
                   gArduboyAvrRoms[index].name ? gArduboyAvrRoms[index].name : "(null)");
 }
 
-static void ArduboyAvrRenderDisplay(void) {
+static bool ArduboyAvrRenderDisplay(void) {
+    // Runs on the emulator task (core 1). Keep it single-threaded: read VRAM,
+    // compute dirty lines, and blit over SPI without cross-task locking.
+    uint8_t local_status[LCD_WIDTH];
+    uint8_t local_frame[FRAME_LINES][LCD_WIDTH];
+
     const bool display_on = ssd1306_get_flag(&gArduboyDisplay, SSD1306_FLAG_DISPLAY_ON);
     if (!display_on) {
-        ArduboyAvrRenderBlank();
-        return;
+        memset(local_status, 0, sizeof(local_status));
+        memset(local_frame, 0, sizeof(local_frame));
+        memcpy(gStatusLine, local_status, sizeof(local_status));
+        memcpy(gFrameBuffer, local_frame, sizeof(local_frame));
+        ST7565_BlitStatusLine();
+        ST7565_BlitFullScreen();
+        return true;
     }
+#ifndef ENABLE_OPENCV
+    // ESP32/ST7565 refresh is expensive; cap blits to reduce SPI/UI overhead.
+    // If a game is producing frames faster than this, we keep gArduboyAvrFrameReady
+    // set and render the newest frame on the next allowed tick.
+    static uint32_t last_blit_ms = 0;
+    const uint32_t now = millis();
+    if ((uint32_t)(now - last_blit_ms) < 33) { // ~30 FPS
+        return false;
+    }
+    last_blit_ms = now;
+#endif
 
     const bool flip_x = ssd1306_get_flag(&gArduboyDisplay, SSD1306_FLAG_SEGMENT_REMAP_0);
     const bool flip_y = ssd1306_get_flag(&gArduboyDisplay, SSD1306_FLAG_COM_SCAN_NORMAL);
     const bool invert = ssd1306_get_flag(&gArduboyDisplay, SSD1306_FLAG_DISPLAY_INVERTED);
 
+#ifndef ENABLE_OPENCV
+    const uint8_t *lut = ArduboyAvrByteLut(flip_y, invert);
+#endif
     for (int page = 0; page < SSD1306_VIRT_PAGES; ++page) {
         const int src_page = flip_y ? (SSD1306_VIRT_PAGES - 1 - page) : page;
-        uint8_t *dest = (page == 0) ? gStatusLine : gFrameBuffer[page - 1];
+        uint8_t *dest = (page == 0) ? local_status : local_frame[page - 1];
         for (int col = 0; col < SSD1306_VIRT_COLUMNS; ++col) {
             const int src_col = flip_x ? (SSD1306_VIRT_COLUMNS - 1 - col) : col;
             uint8_t v = gArduboyDisplay.vram[src_page][src_col];
-            if (flip_y) {
-                v = ArduboyAvrReverseBits(v);
-            }
-            if (invert) {
-                v = static_cast<uint8_t>(~v);
-            }
+            v = lut[v];
             dest[col] = v;
         }
     }
+    // Publish to the real frame buffers used by ST7565 blit functions.
+    memcpy(gStatusLine, local_status, sizeof(local_status));
+    memcpy(gFrameBuffer, local_frame, sizeof(local_frame));
 
-    ST7565_BlitStatusLine();
-    ST7565_BlitFullScreen();
+    // Avoid full-screen blits when possible; they are very costly on ESP32.
+    static uint8_t last_status[LCD_WIDTH];
+    static uint8_t last_frame[FRAME_LINES][LCD_WIDTH];
+    static bool have_last = false;
+
+    bool any = false;
+    if (!have_last || memcmp(last_status, gStatusLine, sizeof(last_status)) != 0) {
+        memcpy(last_status, gStatusLine, sizeof(last_status));
+        ST7565_BlitStatusLine();
+        any = true;
+    }
+
+    for (unsigned line = 0; line < FRAME_LINES; ++line) {
+        if (!have_last || memcmp(last_frame[line], gFrameBuffer[line], LCD_WIDTH) != 0) {
+            memcpy(last_frame[line], gFrameBuffer[line], LCD_WIDTH);
+            ST7565_BlitLine(line);
+            any = true;
+        }
+    }
+
+    have_last = true;
+    return any;
+}
+
+static void ArduboyAvrPreparePresent(void) {
+    // Build the next frame from SSD1306 VRAM under the emulator lock, then hand it
+    // off to core0 for SPI blitting.
+    uint8_t local_status[LCD_WIDTH];
+    uint8_t local_frame[FRAME_LINES][LCD_WIDTH];
+
+    ArduboyAvrLock();
+    const bool display_on = ssd1306_get_flag(&gArduboyDisplay, SSD1306_FLAG_DISPLAY_ON);
+    if (!display_on) {
+        memset(local_status, 0, sizeof(local_status));
+        memset(local_frame, 0, sizeof(local_frame));
+    } else {
+        const bool flip_x = ssd1306_get_flag(&gArduboyDisplay, SSD1306_FLAG_SEGMENT_REMAP_0);
+        const bool flip_y = ssd1306_get_flag(&gArduboyDisplay, SSD1306_FLAG_COM_SCAN_NORMAL);
+        const bool invert = ssd1306_get_flag(&gArduboyDisplay, SSD1306_FLAG_DISPLAY_INVERTED);
+#ifndef ENABLE_OPENCV
+        const uint8_t *lut = ArduboyAvrByteLut(flip_y, invert);
+#endif
+        for (int page = 0; page < SSD1306_VIRT_PAGES; ++page) {
+            const int src_page = flip_y ? (SSD1306_VIRT_PAGES - 1 - page) : page;
+            uint8_t *dest = (page == 0) ? local_status : local_frame[page - 1];
+            for (int col = 0; col < SSD1306_VIRT_COLUMNS; ++col) {
+                const int src_col = flip_x ? (SSD1306_VIRT_COLUMNS - 1 - col) : col;
+                dest[col] = lut[gArduboyDisplay.vram[src_page][src_col]];
+            }
+        }
+    }
+    ArduboyAvrUnlock();
+
+    ArduboyAvrPresentMutexInitOnce();
+    if (!gArduboyAvrPresentMutex) {
+        return;
+    }
+    xSemaphoreTake(gArduboyAvrPresentMutex, portMAX_DELAY);
+
+    gArduboyAvrPresentDirtyStatus =
+        (memcmp(gArduboyAvrPresentStatus, local_status, sizeof(local_status)) != 0);
+    gArduboyAvrPresentDirtyLines = 0;
+    for (unsigned line = 0; line < FRAME_LINES; ++line) {
+        if (memcmp(gArduboyAvrPresentFrame[line], local_frame[line], LCD_WIDTH) != 0) {
+            gArduboyAvrPresentDirtyLines |= static_cast<uint8_t>(1u << line);
+        }
+    }
+
+    memcpy(gArduboyAvrPresentStatus, local_status, sizeof(local_status));
+    memcpy(gArduboyAvrPresentFrame, local_frame, sizeof(local_frame));
+
+    gArduboyAvrPresentPending = (gArduboyAvrPresentDirtyStatus || gArduboyAvrPresentDirtyLines != 0);
+    if (gArduboyAvrPresentPending) {
+        gArduboyAvrStatFramesPrepared++;
+        // Clear DIRTY once we've captured the latest frame.
+        ArduboyAvrLock();
+        ssd1306_set_flag(&gArduboyDisplay, SSD1306_FLAG_DIRTY, 0);
+        ArduboyAvrUnlock();
+        gArduboyAvrFrameReady = false;
+    }
+
+    xSemaphoreGive(gArduboyAvrPresentMutex);
+}
+
+static void ArduboyAvrPrintStatsIfDue(void) {
+    static uint32_t last_ms = 0;
+    const uint32_t now_ms = millis();
+    if (last_ms != 0 && (uint32_t)(now_ms - last_ms) < 1000) {
+        return;
+    }
+    last_ms = now_ms;
+
+    const uint64_t cycles = gArduboyAvrStatCycles;
+    const uint32_t run_us = gArduboyAvrStatRunUs;
+    const uint32_t loop_us = gArduboyAvrStatLoopUs;
+    const uint32_t prepared = gArduboyAvrStatFramesPrepared;
+    const uint32_t presented = gArduboyAvrStatFramesPresented;
+    gArduboyAvrStatCycles = 0;
+    gArduboyAvrStatRunUs = 0;
+    gArduboyAvrStatLoopUs = 0;
+    gArduboyAvrStatFramesPrepared = 0;
+    gArduboyAvrStatFramesPresented = 0;
+
+    const uint32_t run_pct = (loop_us > 0) ? static_cast<uint32_t>((100ULL * run_us) / loop_us) : 0;
+    const uint32_t core = xPortGetCoreID();
+    const UBaseType_t hwm = gArduboyAvrTaskHandle ? uxTaskGetStackHighWaterMark(gArduboyAvrTaskHandle) : 0;
+
+    const uint32_t freq = gArduboyAvr ? (uint32_t)gArduboyAvr->frequency : 0;
+    Serial.printf("[arduboy_avr] core%u mode=%d hz=%u cycles/s=%llu run=%u%% frames prep=%u present=%u pending=%u stack_hwm=%u\n",
+                  (unsigned)core,
+                  (int)gArduboyAvrMode,
+                  (unsigned)freq,
+                  (unsigned long long)cycles,
+                  (unsigned)run_pct,
+                  (unsigned)prepared,
+                  (unsigned)presented,
+                  (unsigned)(gArduboyAvrPresentPending ? 1 : 0),
+                  (unsigned)hwm);
 }
 
 void ARDUBOY_AVR_Render(void) {
@@ -1442,10 +1838,56 @@ void ARDUBOY_AVR_Render(void) {
         return;
     }
 
+#ifndef ENABLE_OPENCV
+    // When exiting the emulator, stop the background task promptly.
+    if (gRequestDisplayScreen != DISPLAY_ARDUBOY_AVR && gArduboyAvrMode != ARDUBOY_AVR_MODE_GAME) {
+        ArduboyAvrTaskStop();
+    }
+#endif
+
     if (gArduboyAvrMode == ARDUBOY_AVR_MODE_MENU) {
         ArduboyAvrRenderMenu();
         return;
     }
+
+    // Game frames are prepared by the emulator task; core0 does the SPI blit.
+#ifndef ENABLE_OPENCV
+    ArduboyAvrPrintStatsIfDue();
+    ArduboyAvrPresentMutexInitOnce();
+    if (gArduboyAvrPresentMutex && gArduboyAvrPresentPending) {
+        uint8_t status[LCD_WIDTH];
+        uint8_t frame[FRAME_LINES][LCD_WIDTH];
+        uint8_t dirty_lines = 0;
+        bool dirty_status = false;
+
+        xSemaphoreTake(gArduboyAvrPresentMutex, portMAX_DELAY);
+        if (gArduboyAvrPresentPending) {
+            dirty_lines = gArduboyAvrPresentDirtyLines;
+            dirty_status = gArduboyAvrPresentDirtyStatus;
+            memcpy(status, gArduboyAvrPresentStatus, sizeof(status));
+            memcpy(frame, gArduboyAvrPresentFrame, sizeof(frame));
+            gArduboyAvrPresentPending = false;
+            gArduboyAvrPresentDirtyLines = 0;
+            gArduboyAvrPresentDirtyStatus = false;
+        }
+        xSemaphoreGive(gArduboyAvrPresentMutex);
+
+        if (dirty_status) {
+            memcpy(gStatusLine, status, sizeof(status));
+            ST7565_BlitStatusLine();
+        }
+        if (dirty_lines) {
+            memcpy(gFrameBuffer, frame, sizeof(frame));
+            for (unsigned line = 0; line < FRAME_LINES; ++line) {
+                if (dirty_lines & (1u << line)) {
+                    ST7565_BlitLine(line);
+                }
+            }
+            gArduboyAvrStatFramesPresented++;
+        }
+    }
+#endif
+    return;
 
     if (!gArduboyAvrFrameReady) {
         if (!gArduboyAvrHasFrame) {
@@ -1455,8 +1897,9 @@ void ARDUBOY_AVR_Render(void) {
         return;
     }
 
-    ArduboyAvrRenderDisplay();
-    gArduboyAvrFrameReady = false;
-    gArduboyAvrHasFrame = true;
-    ssd1306_set_flag(&gArduboyDisplay, SSD1306_FLAG_DIRTY, 0);
+    if (ArduboyAvrRenderDisplay()) {
+        gArduboyAvrFrameReady = false;
+        gArduboyAvrHasFrame = true;
+        ssd1306_set_flag(&gArduboyDisplay, SSD1306_FLAG_DIRTY, 0);
+    }
 }

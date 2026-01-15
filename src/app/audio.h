@@ -42,9 +42,31 @@ enum BEEP_Type_t
 
 typedef enum BEEP_Type_t BEEP_Type_t;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern BEEP_Type_t       gBeepToPlay;
 
 void AUDIO_PlayBeep(BEEP_Type_t Beep);
+
+#ifdef ENABLE_VOICE
+extern VOICE_ID_t        gVoiceID[8];
+extern uint8_t           gVoiceReadIndex;
+extern uint8_t           gVoiceWriteIndex;
+extern volatile uint16_t gCountdownToPlayNextVoice_10ms;
+extern volatile bool     gFlagPlayQueuedVoice;
+extern VOICE_ID_t        gAnotherVoiceID;
+
+void    AUDIO_PlaySingleVoice(bool bFlag);
+void    AUDIO_SetVoiceID(uint8_t Index, VOICE_ID_t VoiceID);
+uint8_t AUDIO_SetDigitVoice(uint8_t Index, uint16_t Value);
+void    AUDIO_PlayQueuedVoice(void);
+#endif
+
+#ifdef __cplusplus
+}
+#endif
 
 enum
 {
@@ -145,20 +167,4 @@ static inline void AUDIO_AudioPathOff(void) {
     
 }
 
-
-#ifdef ENABLE_VOICE
-	extern VOICE_ID_t        gVoiceID[8];
-	extern uint8_t           gVoiceReadIndex;
-	extern uint8_t           gVoiceWriteIndex;
-	extern volatile uint16_t gCountdownToPlayNextVoice_10ms;
-	extern volatile bool     gFlagPlayQueuedVoice;
-	extern VOICE_ID_t        gAnotherVoiceID;
-	
-	void    AUDIO_PlaySingleVoice(bool bFlag);
-	void    AUDIO_SetVoiceID(uint8_t Index, VOICE_ID_t VoiceID);
-	uint8_t AUDIO_SetDigitVoice(uint8_t Index, uint16_t Value);
-	void    AUDIO_PlayQueuedVoice(void);
 #endif
-
-#endif
-

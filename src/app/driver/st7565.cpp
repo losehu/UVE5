@@ -105,9 +105,13 @@ static void DrawLine(uint8_t column, uint8_t line, const uint8_t *lineBuffer, un
     
     if (lineBuffer) {
         // 发送缓冲区数据
+#if defined(ARDUINO_ARCH_ESP32)
+        spi->transferBytes(const_cast<uint8_t *>(lineBuffer), nullptr, size_defVal);
+#else
         for (unsigned i = 0; i < size_defVal; i++) {
             spi->transfer(lineBuffer[i]);
         }
+#endif
     } else {
         // 填充固定值 - 这里的 size_defVal 参数实际表示填充值
         for (unsigned i = 0; i < LCD_WIDTH; i++) {
@@ -174,7 +178,7 @@ void ST7565_Init(void) {
     // 初始化SPI
     spi = new SPIClass(HSPI);
     spi->begin(ST7565_PIN_CLK, -1, ST7565_PIN_MOSI, ST7565_PIN_CS);
-    spi->setFrequency(4000000);  // 4MHz SPI时钟
+    spi->setFrequency(10000000);  // 10MHz SPI时钟 (ST7565通常可更高，按需调整)
     spi->setDataMode(SPI_MODE0);
     spi->setBitOrder(MSBFIRST);
     

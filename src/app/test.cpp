@@ -8,6 +8,7 @@
 // #include <BLEUtils.h>
 // #include <BLEServer.h>
 // #include "driver/st7565.h"
+// #include "../lib/shared_flash.h"
 
 // // === 自定义广播名称（手机可见） ===
 // const char* BLE_NAME = "ESP32S3_BLE_DEMO";
@@ -19,16 +20,7 @@
 // // ====== 自动重连与超时控制 ======
 // const unsigned long WIFI_TIMEOUT_MS = 15000;  // 连接超时（15秒）
 
-// void switch_to_factory_and_restart() {
-//   const esp_partition_t* part = esp_partition_find_first(
-//       ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_FACTORY, "factory");
-//   if (part) {
-//     esp_ota_set_boot_partition(part);
-//     // esp_restart();
-//   } else {
-//     // 未找到 factory 分区
-//   }
-// }
+
 
 // // 引脚诊断函数
 // void pinDiagnostic() {

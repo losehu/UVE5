@@ -19,6 +19,10 @@
 
 #include <stdint.h>
 #include "stdbool.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 enum FUNCTION_Type_t
 {
 	FUNCTION_FOREGROUND = 0,  // ???
@@ -38,5 +42,9 @@ void FUNCTION_Init(void);
 void FUNCTION_Select(FUNCTION_Type_t Function);
 bool FUNCTION_IsRx();
 void FUNCTION_Transmit();
+
+#ifdef __cplusplus
+}
+#endif
 #endif
 

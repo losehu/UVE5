@@ -1153,8 +1153,9 @@ void APP_TimeSlice10ms(void) {
             gUpdateDisplay = false;
             GUI_DisplayScreen();
         }
-        if (gUpdateStatus)
-            UI_DisplayStatus();
+        // The Arduboy AVR screen drives its own status line and full-screen blits.
+        // Avoid extra status refresh work here to keep emulator performance high.
+        gUpdateStatus = false;
         return;
     }
 #endif

@@ -317,11 +317,9 @@ void SETTINGS_LoadCalibration(void)
         gBatteryCalibration[0] = 1900;
         gBatteryCalibration[1] = 2000;
     }
-#ifdef ENABLE_OPENCV
     if (gBatteryCalibration[3] == 0 || gBatteryCalibration[3] >= 5000) {
         gBatteryCalibration[3] = 2000;
     }
-#endif
     gBatteryCalibration[5] = 2300;
 
 #ifdef ENABLE_VOX

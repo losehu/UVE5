@@ -156,6 +156,7 @@ void setup() {
 
 
 void loop() {
+    Serial.println("Starting main application...");
      UI_DisplayWelcome();
 #ifdef ENABLE_BOOTLOADER
     if(KEYBOARD_Poll() == KEY_MENU)
