@@ -223,7 +223,7 @@ bool          gIsNoaaMode;
     uint8_t       gNoaaChannel;
 #endif
 
-bool gUpdateDisplay;
+volatile bool gUpdateDisplay;
 
 
 uint8_t gShowChPrefix;

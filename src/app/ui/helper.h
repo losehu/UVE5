@@ -14,13 +14,20 @@
  *     limitations under the License.
  */
 
+
 #ifndef UI_UI_H
 #define UI_UI_H
 
 #include <stdbool.h>
 #include <stdint.h>
-//#define ENABLE_PINYIN
-//#define test 0
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// #define ENABLE_PINYIN
+// #define test 0
+
 void UI_GenerateChannelString(char *pString, const uint8_t Channel);
 
 void UI_GenerateChannelStringEx(char *pString, const bool bShowPrefix, const uint8_t ChannelNumber);
@@ -35,7 +42,6 @@ bool CHINESE_JUDGE(char *name, uint8_t len);
 
 void UI_DisplayClear();
 
-
 void UI_PrintStringSmallBuffer(const char *pString, uint8_t *buffer);
 
 void UI_DisplayFrequency(const char *string, uint8_t X, uint8_t Y, bool center);
@@ -44,8 +50,7 @@ void UI_DrawPixelBuffer(uint8_t (*buffer)[128], uint8_t x, uint8_t y, bool black
 
 void UI_DisplayPopup(const char *string);
 
-#endif
-bool isChineseChar(char a ,uint8_t now_index,uint8_t sum_index) ;
+bool isChineseChar(char a, uint8_t now_index, uint8_t sum_index);
 
 void GUI_DisplaySmallest(const char *pString, uint8_t x, uint8_t y, bool statusbar, bool fill);
 
@@ -54,8 +59,14 @@ void PutPixelStatus(uint8_t x, uint8_t y, bool fill);
 void PutPixel(uint8_t x, uint8_t y, bool fill);
 
 void DrawVLine(int sy, int ey, int nx, bool fill);
-void show_uint32(uint32_t num,uint8_t  line);
-void show_hex(uint32_t num, uint8_t line) ;
+void show_uint32(uint32_t num, uint8_t line);
+void show_hex(uint32_t num, uint8_t line);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
 
 //void UI_DrawPixel(uint8_t x, uint8_t y, bool black);
 //void UI_DrawLine(int16_t x1, int16_t y1, int16_t x2, int16_t y2, bool black);

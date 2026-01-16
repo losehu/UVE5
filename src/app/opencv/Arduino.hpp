@@ -1,6 +1,18 @@
 #pragma once
 #include "stdint.h"
 #include "stdbool.h"
+
+#ifdef __cplusplus
+#include <cstdlib>
+#else
+#include <stdlib.h>
+#endif
+
+// Arduino-style basic types (used by many .ino sources)
+typedef uint8_t byte;
+typedef bool boolean;
+typedef uint16_t word;
+
 #ifdef __cplusplus
 #include <iostream>
 #endif
@@ -183,6 +195,70 @@ struct EspRestartException {};
 #ifdef __cplusplus
   #include <chrono>
   #include <thread>
+
+    static inline unsigned long millis() {
+            static const auto start = std::chrono::steady_clock::now();
+            const auto now = std::chrono::steady_clock::now();
+            return (unsigned long)std::chrono::duration_cast<std::chrono::milliseconds>(now - start).count();
+    }
+
+    static inline unsigned long micros() {
+            static const auto start = std::chrono::steady_clock::now();
+            const auto now = std::chrono::steady_clock::now();
+            return (unsigned long)std::chrono::duration_cast<std::chrono::microseconds>(now - start).count();
+    }
+
+    static inline char * ultoa(unsigned long value, char * str, int base) {
+        if (!str) return str;
+        if (base < 2 || base > 36) {
+            str[0] = '\0';
+            return str;
+        }
+
+        char * p = str;
+        do {
+            const unsigned long digit = value % (unsigned long)base;
+            *p++ = (digit < 10) ? (char)('0' + digit) : (char)('a' + (digit - 10));
+            value /= (unsigned long)base;
+        } while (value);
+        *p = '\0';
+
+        for (char * i = str, * j = p - 1; i < j; ++i, --j) {
+            const char tmp = *i;
+            *i = *j;
+            *j = tmp;
+        }
+        return str;
+    }
+
+    static inline char * itoa(int value, char * str, int base) {
+        if (!str) return str;
+        if (base < 2 || base > 36) {
+            str[0] = '\0';
+            return str;
+        }
+
+        if (value < 0 && base == 10) {
+            str[0] = '-';
+            // Use wider type to avoid UB on INT_MIN
+            return ultoa((unsigned long)(-(long long)value), str + 1, base) ? str : str;
+        }
+        return ultoa((unsigned long)value, str, base);
+    }
+
+      static inline void randomSeed(unsigned long seed) {
+          std::srand((unsigned)seed);
+      }
+
+      static inline long random(long max) {
+          if (max <= 0) return 0;
+          return (long)(std::rand() % max);
+      }
+
+      static inline long random(long min, long max) {
+          if (max <= min) return min;
+          return min + random(max - min);
+      }
 
   static inline void delay(unsigned ms) {
       std::this_thread::sleep_for(std::chrono::milliseconds(ms));

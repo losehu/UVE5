@@ -892,7 +892,6 @@ static uint8_t ArduboyAvrReverseBits(uint8_t v) {
     return v;
 }
 
-#ifndef ENABLE_OPENCV
 static const uint8_t *ArduboyAvrByteLut(bool flip_y, bool invert) {
     static bool inited = false;
     static uint8_t lut_id[256];
@@ -916,7 +915,6 @@ static const uint8_t *ArduboyAvrByteLut(bool flip_y, bool invert) {
     }
     return invert ? lut_inv : lut_id;
 }
-#endif
 
 #ifndef ENABLE_OPENCV
 static TaskHandle_t gArduboyAvrTaskHandle = nullptr;
@@ -1698,9 +1696,7 @@ static bool ArduboyAvrRenderDisplay(void) {
     const bool flip_y = ssd1306_get_flag(&gArduboyDisplay, SSD1306_FLAG_COM_SCAN_NORMAL);
     const bool invert = ssd1306_get_flag(&gArduboyDisplay, SSD1306_FLAG_DISPLAY_INVERTED);
 
-#ifndef ENABLE_OPENCV
     const uint8_t *lut = ArduboyAvrByteLut(flip_y, invert);
-#endif
     for (int page = 0; page < SSD1306_VIRT_PAGES; ++page) {
         const int src_page = flip_y ? (SSD1306_VIRT_PAGES - 1 - page) : page;
         uint8_t *dest = (page == 0) ? local_status : local_frame[page - 1];
@@ -1739,6 +1735,7 @@ static bool ArduboyAvrRenderDisplay(void) {
     return any;
 }
 
+#ifndef ENABLE_OPENCV
 static void ArduboyAvrPreparePresent(void) {
     // Build the next frame from SSD1306 VRAM under the emulator lock, then hand it
     // off to core0 for SPI blitting.
@@ -1754,9 +1751,7 @@ static void ArduboyAvrPreparePresent(void) {
         const bool flip_x = ssd1306_get_flag(&gArduboyDisplay, SSD1306_FLAG_SEGMENT_REMAP_0);
         const bool flip_y = ssd1306_get_flag(&gArduboyDisplay, SSD1306_FLAG_COM_SCAN_NORMAL);
         const bool invert = ssd1306_get_flag(&gArduboyDisplay, SSD1306_FLAG_DISPLAY_INVERTED);
-#ifndef ENABLE_OPENCV
         const uint8_t *lut = ArduboyAvrByteLut(flip_y, invert);
-#endif
         for (int page = 0; page < SSD1306_VIRT_PAGES; ++page) {
             const int src_page = flip_y ? (SSD1306_VIRT_PAGES - 1 - page) : page;
             uint8_t *dest = (page == 0) ? local_status : local_frame[page - 1];
@@ -1835,6 +1830,8 @@ static void ArduboyAvrPrintStatsIfDue(void) {
                   (unsigned)hwm);
 }
 
+#endif
+
 void ARDUBOY_AVR_Render(void) {
     if (!gArduboyAvrInitialized) {
         return;
@@ -1889,7 +1886,10 @@ void ARDUBOY_AVR_Render(void) {
         }
     }
 #endif
+
+#ifndef ENABLE_OPENCV
     return;
+#endif
 
     if (!gArduboyAvrFrameReady) {
         if (!gArduboyAvrHasFrame) {

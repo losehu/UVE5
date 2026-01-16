@@ -26,6 +26,11 @@ void Catacombs_Init(void);
 void Catacombs_Loop(void);
 #endif
 
+#ifdef ENABLE_TRENCH_RUN
+void TrenchRun_Init(void);
+void TrenchRun_Loop(void);
+#endif
+
 #ifdef __cplusplus
 }
 #endif

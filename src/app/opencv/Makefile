@@ -25,35 +25,44 @@ endif
 
 INCS := -I$(ROOT)/src/app -I$(ROOT)/src/app/opencv -I$(ROOT)/src/app/driver -I$(ROOT)/src/app/helper -I$(ROOT)/src/app/ui -I$(ROOT)/src/app/app -I$(ROOT)/src/app/avr/simavr/sim -I$(ROOT)/src/app/avr/simavr/cores -I$(ROOT)/src/app/avr/simavr/parts
 DEFS := -DENABLE_OPENCV \
-    -DENABLE_FMRADIO=1 \
-    -DENABLE_VOX=1 \
+    -DENABLE_UART=1   \
+    -DENABLE_FMRADIO=1  \
+    -DENABLE_VOX=1  \
     -DENABLE_DTMF_CALLING=1 \
     -DENABLE_FLASHLIGHT=1 \
     -DENABLE_BIG_FREQ=1 \
-    -DENABLE_KEEP_MEM_NAME=1 \
-    -DENABLE_WIDE_RX=1 \
+    -DENABLE_KEEP_MEM_NAME=1  \
+    -DENABLE_WIDE_RX=1  \
     -DENABLE_NO_CODE_SCAN_TIMEOUT=1 \
     -DENABLE_AM_FIX=1 \
     -DENABLE_SQUELCH_MORE_SENSITIVE=1 \
-    -DENABLE_FASTER_CHANNEL_SCAN=1 \
+    -DENABLE_FASTER_CHANNEL_SCAN=1  \
     -DENABLE_RSSI_BAR=1 \
     -DENABLE_COPY_CHAN_TO_VFO=1 \
     -DENABLE_SPECTRUM=1 \
-    -DENABLE_REDUCE_LOW_MID_TX_POWER=0 \
-    -DENABLE_SCAN_RANGES=1 \
-    -DENABLE_MDC1200=1 \
-    -DENABLE_MDC1200_CONTACT=1 \
+    -DENABLE_ARDUBOY=1 \
+    -DENABLE_SQUID_JUMP=1 \
+    -DENABLE_COTD=1 \
+    -DENABLE_TRENCH_RUN=1 \
+    -DENABLE_ARDUBOY_AVR=0  \
+    -DENABLE_REDUCE_LOW_MID_TX_POWER=0  \
+    -DENABLE_SCAN_RANGES=1  \
+    -DENABLE_MDC1200=1  \
+    -DENABLE_MDC1200_CONTACT=1  \
     -DENABLE_MDC1200_EDIT=1 \
     -DENABLE_CHINESE_FULL=4 \
+    -DENABLE_PINYIN=1 \
     -DENABLE_CUSTOM_SIDEFUNCTIONS=1 \
     -DENABLE_SIDEFUNCTIONS_SEND=1 \
     -DENABLE_TURN=1 \
     -DENABLE_WARNING=1 \
-    -DENABLE_PINYIN=1 \
     -DENABLE_MESSENGER=1 \
-    -DENABLE_MESSENGER_DELIVERY_NOTIFICATION=1 \
+    -DENABLE_MESSENGER_DELIVERY_NOTIFICATION=1  \
     -DENABLE_MESSENGER_NOTIFICATION=1 \
-    -DENABLE_ARDUBOY_AVR=1
+    -DENABLE_ARDUBOY=1 \
+    -DENABLE_COTD=1 \
+    -DSIMAVR_STUB_ADC=1 \
+    -DSIMAVR_STUB_ACOMP=1
 
 
 FORCE_INC := -include stdio.h 
@@ -88,6 +97,17 @@ CPP_SRCS_ABS := $(shell find $(ROOT)/src/app -type f -name '*.cpp')
 # Convert to paths relative to $(ROOT) (e.g., src/app/main.cpp)
 C_SRCS   := $(patsubst $(ROOT)/%,%,$(C_SRCS_ABS))
 CPP_SRCS := $(patsubst $(ROOT)/%,%,$(CPP_SRCS_ABS))
+
+# Host(OpenCV) build shouldn't compile the firmware entrypoint.
+# It pulls in ESP-IDF headers (e.g. driver/uart.h) that are not available on macOS/Linux hosts.
+CPP_SRCS := $(filter-out src/app/main.cpp,$(CPP_SRCS))
+
+# simavr: when we enable stubbed peripherals, exclude the real implementations
+# to avoid duplicate symbols at link time.
+C_SRCS := $(filter-out \
+  src/app/avr/simavr/sim/avr_adc.c \
+  src/app/avr/simavr/sim/avr_acomp.c \
+  ,$(C_SRCS))
 
 OBJS := $(patsubst %.c,$(BUILDDIR)/%.o,$(C_SRCS)) \
         $(patsubst %.cpp,$(BUILDDIR)/%.o,$(CPP_SRCS))

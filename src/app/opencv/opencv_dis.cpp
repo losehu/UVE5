@@ -85,6 +85,14 @@ int OPENCV_PollKey(void)
   return gLastKey.exchange(-1);
 }
 
+int OPENCV_IsKeyDown(int key)
+{
+  if (!gWindow || key < 0) {
+    return 0;
+  }
+  return glfwGetKey(gWindow, key) == GLFW_PRESS ? 1 : 0;
+}
+
 static void UpdateDisplay()
 {
   if (!gWindow || !gGlReady || gLcdCanvas.empty() || gTargetW <= 0 || gTargetH <= 0) {
@@ -382,6 +390,17 @@ void ST7565_BlitStatusLine(void) {
     ST7565_WriteByte(0x40);  // 设置起始行
     DrawLine(0, 0, gStatusLine, LCD_WIDTH);
     PresentIfDirty();
+}
+
+void ST7565_BlitAll(void) {
+  ST7565_WriteByte(0x40);  // 设置起始行
+
+  DrawLine(0, 0, gStatusLine, LCD_WIDTH);
+  for (unsigned line = 0; line < FRAME_LINES; line++) {
+    DrawLine(0, line + 1, gFrameBuffer[line], LCD_WIDTH);
+  }
+
+  PresentIfDirty();
 }
 
 // 填充整个屏幕

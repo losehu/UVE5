@@ -304,7 +304,7 @@ extern bool              gIsNoaaMode;
 	extern uint8_t           gNoaaChannel;
 #endif
 extern volatile bool         gNextTimeslice;
-extern bool                  gUpdateDisplay;
+extern volatile bool         gUpdateDisplay;
 #ifdef ENABLE_FMRADIO
 extern uint8_t           gFM_ChannelPosition;
 #endif

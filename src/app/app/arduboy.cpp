@@ -7,6 +7,11 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifndef ENABLE_OPENCV
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#endif
+
 extern "C" {
 #include "../driver/st7565.h"
 #include "../misc.h"
@@ -25,12 +30,17 @@ struct ArduboyGame {
     void (*loop)(void);
 };
 
+#ifndef ENABLE_OPENCV
+static void ArduboyTaskStartIfNeeded(void);
+static void ArduboyTaskStop(void);
+#endif
+
 static ArduboyMode gArduboyMode = ARDUBOY_MODE_MENU;
 static int gArduboySelected = 0;
 static int gArduboyActive = -1;
 static uint8_t gArduboyButtonState = 0;
 
-bool gArduboyFrameReady = false;
+volatile bool gArduboyFrameReady = false;
 
 static uint32_t gArduboyRng = 0x12345678U;
 
@@ -63,8 +73,12 @@ static uint8_t ArduboyMapKey(KEY_Code_t key) {
         case KEY_6:
             return RIGHT_BUTTON;
         case KEY_UP:
+        case KEY_MENU:
+        case KEY_SIDE1:
+        case KEY_PTT:
             return A_BUTTON;
         case KEY_DOWN:
+        case KEY_SIDE2:
             return B_BUTTON;
         default:
             return 0;
@@ -311,9 +325,53 @@ static ArduboyGame gArduboyGames[] = {
 #ifdef ENABLE_COTD
     {"COTD", &Catacombs_Init, &Catacombs_Loop},
 #endif
+#ifdef ENABLE_TRENCH_RUN
+    {"TRENCH", &TrenchRun_Init, &TrenchRun_Loop},
+#endif
 };
 
 static const int gArduboyGameCount = sizeof(gArduboyGames) / sizeof(gArduboyGames[0]);
+
+#ifndef ENABLE_OPENCV
+static TaskHandle_t gArduboyTaskHandle = nullptr;
+static volatile bool gArduboyTaskStopRequested = false;
+
+static void ArduboyTaskMain(void *arg)
+{
+    (void)arg;
+    for (;;) {
+        if (gArduboyTaskStopRequested || gArduboyMode != ARDUBOY_MODE_GAME || gArduboyActive < 0) {
+            break;
+        }
+
+        // Game loop is expected to throttle itself via arduboy.nextFrame().
+        gArduboyGames[gArduboyActive].loop();
+        vTaskDelay(1);
+    }
+
+    gArduboyTaskHandle = nullptr;
+    gArduboyTaskStopRequested = false;
+    vTaskDelete(nullptr);
+}
+
+static void ArduboyTaskStartIfNeeded(void)
+{
+    if (gArduboyTaskHandle) {
+        return;
+    }
+    gArduboyTaskStopRequested = false;
+    // Run on core 1 to keep UI responsive.
+    xTaskCreatePinnedToCore(ArduboyTaskMain, "arduboy", 8192, nullptr, 3, &gArduboyTaskHandle, 1);
+}
+
+static void ArduboyTaskStop(void)
+{
+    if (!gArduboyTaskHandle) {
+        return;
+    }
+    gArduboyTaskStopRequested = true;
+}
+#endif
 
 // --------------------- Menu/flow --------------------
 static void ArduboyStartGame(int index) {
@@ -328,6 +386,10 @@ static void ArduboyStartGame(int index) {
     gArduboyGames[index].init();
     gArduboyFrameReady = false;
     arduboy.display();
+
+#ifndef ENABLE_OPENCV
+    ArduboyTaskStartIfNeeded();
+#endif
 }
 
 static void ArduboyReturnToMenu(void) {
@@ -335,6 +397,10 @@ static void ArduboyReturnToMenu(void) {
     gArduboyActive = -1;
     gArduboyMode = ARDUBOY_MODE_MENU;
     gUpdateDisplay = true;
+
+#ifndef ENABLE_OPENCV
+    ArduboyTaskStop();
+#endif
 }
 
 void ARDUBOY_Enter(void) {
@@ -353,12 +419,21 @@ void ARDUBOY_ExitToMain(void) {
     gArduboyMode = ARDUBOY_MODE_MENU;
     gRequestDisplayScreen = DISPLAY_MAIN;
     gUpdateDisplay = true;
+
+#ifndef ENABLE_OPENCV
+    ArduboyTaskStop();
+#endif
 }
 
 void ARDUBOY_TimeSlice10ms(void) {
+#ifndef ENABLE_OPENCV
+    // Game loop runs in a dedicated task on real hardware.
+    (void)0;
+#else
     if (gArduboyMode == ARDUBOY_MODE_GAME && gArduboyActive >= 0) {
         gArduboyGames[gArduboyActive].loop();
     }
+#endif
 }
 
 void ARDUBOY_ProcessKeys(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
@@ -431,7 +506,7 @@ static void ArduboyRenderMenu(void) {
 }
 
 static void ArduboyRenderGame(void) {
-    const uint8_t *src = arduboy.getBuffer();
+    const uint8_t *src = Arduboy2_GetPresentBuffer();
     memcpy(gStatusLine, src, LCD_WIDTH);
     for (int i = 0; i < FRAME_LINES; ++i) {
         memcpy(gFrameBuffer[i], src + (LCD_WIDTH * (i + 1)), LCD_WIDTH);

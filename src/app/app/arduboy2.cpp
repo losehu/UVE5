@@ -11,8 +11,8 @@
 #include <Arduino.h>
 #endif
 
-extern bool gArduboyFrameReady;
-extern "C" bool gUpdateDisplay;
+extern volatile bool gArduboyFrameReady;
+extern "C" volatile bool gUpdateDisplay;
 
 extern "C" {
 #include "../font.h"
@@ -36,10 +36,20 @@ static uint32_t arduboy_millis(void) {
 
 Arduboy2 arduboy;
 
+static uint8_t gArduboyPresent[2][Arduboy2::width * Arduboy2::height / 8];
+static volatile uint8_t gArduboyPresentIndex = 0;
+
+const uint8_t *Arduboy2_GetPresentBuffer()
+{
+    return gArduboyPresent[gArduboyPresentIndex];
+}
+
 void Arduboy2::begin() {
     clear();
-    setFrameRate(30);
+    setFrameRate(ARDUBOY_DEFAULT_FPS);
     lastFrameMs = arduboy_millis();
+    frameCount = 0;
+    textSize = 1;
 }
 
 void Arduboy2::initRandomSeed() {
@@ -66,7 +76,19 @@ bool Arduboy2::nextFrame() {
         return false;
     }
     lastFrameMs = now;
+    ++frameCount;
     return true;
+}
+
+bool Arduboy2::everyXFrames(uint8_t frames) const {
+    if (frames == 0) {
+        return false;
+    }
+    return (frameCount % frames) == 0;
+}
+
+uint32_t Arduboy2::getMillis() const {
+    return arduboy_millis();
 }
 
 void Arduboy2::pollButtons() {
@@ -80,15 +102,15 @@ bool Arduboy2::pressed(uint8_t buttons) const {
     // Some upstream sketches call pressed() without ever calling pollButtons().
     // Use the raw button state so input still works; justPressed/justReleased
     // continue to require pollButtons() as usual.
-    return (rawButtons & buttons) == buttons;
+    return (rawButtons & buttons) != 0;
 }
 
 bool Arduboy2::justPressed(uint8_t buttons) const {
-    return (justPressedButtons & buttons) == buttons;
+    return (justPressedButtons & buttons) != 0;
 }
 
 bool Arduboy2::justReleased(uint8_t buttons) const {
-    return (justReleasedButtons & buttons) == buttons;
+    return (justReleasedButtons & buttons) != 0;
 }
 
 void Arduboy2::clear() {
@@ -96,8 +118,38 @@ void Arduboy2::clear() {
 }
 
 void Arduboy2::display() {
+    // If the UI hasn't consumed the previous frame yet, avoid overwriting the
+    // double-buffer slot it might still be copying from.
+    // This prevents flicker/tearing when the game produces frames faster than
+    // the UI can blit (common in very light scenes like intros).
+    if (gArduboyFrameReady) {
+        gUpdateDisplay = true;
+        return;
+    }
+
+    const uint8_t next = static_cast<uint8_t>(gArduboyPresentIndex ^ 1U);
+    memcpy(gArduboyPresent[next], buffer, sizeof(buffer));
+    gArduboyPresentIndex = next;
+
+    // Publish the new frame to the UI task.
+    __sync_synchronize();
     gArduboyFrameReady = true;
     gUpdateDisplay = true;
+}
+
+void Arduboy2::display(bool clear_after) {
+    // If the UI hasn't consumed the previous frame yet, don't publish a new
+    // one and (critically) don't clear the buffer, otherwise we create visible
+    // blank frames/flicker.
+    if (gArduboyFrameReady) {
+        gUpdateDisplay = true;
+        return;
+    }
+
+    display();
+    if (clear_after) {
+        clear();
+    }
 }
 
 void Arduboy2::digitalWriteRGB(uint8_t r, uint8_t g, uint8_t b) {
@@ -260,6 +312,17 @@ void Arduboy2::setCursor(int16_t x, int16_t y) {
     cursorY = y;
 }
 
+void Arduboy2::setTextSize(uint8_t size) {
+    if (size == 0) {
+        size = 1;
+    }
+    // Keep it small; most sketches only use 1 or 2.
+    if (size > 4) {
+        size = 4;
+    }
+    textSize = size;
+}
+
 void Arduboy2::print(const char *s) {
     if (!s) {
         return;
@@ -268,7 +331,7 @@ void Arduboy2::print(const char *s) {
         const char c = *s++;
         if (c == '\n') {
             cursorX = 0;
-            cursorY = static_cast<int16_t>(cursorY + 6);
+            cursorY = static_cast<int16_t>(cursorY + (6 * (textSize ? textSize : 1)));
             continue;
         }
         if (c == '\r') {
@@ -276,7 +339,7 @@ void Arduboy2::print(const char *s) {
             continue;
         }
         drawChar(cursorX, cursorY, c);
-        cursorX = static_cast<int16_t>(cursorX + 4);
+        cursorX = static_cast<int16_t>(cursorX + (4 * (textSize ? textSize : 1)));
     }
 }
 
@@ -309,11 +372,18 @@ void Arduboy2::drawChar(int16_t x, int16_t y, char c) {
 #else
     const uint8_t *cols = gFont3x5[index];
 #endif
+    const uint8_t scale = textSize ? textSize : 1;
     for (uint8_t col = 0; col < 3; ++col) {
         uint8_t pixels = cols[col];
         for (uint8_t row = 0; row < 5; ++row) {
             if (pixels & 0x01) {
-                drawPixel(static_cast<int16_t>(x + col), static_cast<int16_t>(y + row), WHITE);
+                const int16_t px = static_cast<int16_t>(x + static_cast<int16_t>(col * scale));
+                const int16_t py = static_cast<int16_t>(y + static_cast<int16_t>(row * scale));
+                for (uint8_t dx = 0; dx < scale; ++dx) {
+                    for (uint8_t dy = 0; dy < scale; ++dy) {
+                        drawPixel(static_cast<int16_t>(px + dx), static_cast<int16_t>(py + dy), WHITE);
+                    }
+                }
             }
             pixels >>= 1;
         }

@@ -12,5 +12,6 @@
 
 bool getScreenSize(int& width, int& height);
 int OPENCV_PollKey(void);
+int OPENCV_IsKeyDown(int key);
 
 

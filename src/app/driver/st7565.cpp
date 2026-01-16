@@ -18,6 +18,9 @@
 #ifndef ENABLE_OPENCV
 #include <Arduino.h>
 #include <SPI.h>
+#if defined(ARDUINO_ARCH_ESP32)
+#include <driver/gpio.h>
+#endif
 
 // 全局帧缓冲区
 uint8_t gStatusLine[LCD_WIDTH];
@@ -53,19 +56,59 @@ static uint8_t cmds[] = {
 
 // 内部辅助函数
 static inline void CS_LOW() {
+#if defined(ARDUINO_ARCH_ESP32)
+    gpio_set_level((gpio_num_t)ST7565_PIN_CS, 0);
+#else
     digitalWrite(ST7565_PIN_CS, LOW);
+#endif
 }
 
 static inline void CS_HIGH() {
+#if defined(ARDUINO_ARCH_ESP32)
+    gpio_set_level((gpio_num_t)ST7565_PIN_CS, 1);
+#else
     digitalWrite(ST7565_PIN_CS, HIGH);
+#endif
 }
 
 static inline void A0_LOW() {
+#if defined(ARDUINO_ARCH_ESP32)
+    gpio_set_level((gpio_num_t)ST7565_PIN_A0, 0);
+#else
     digitalWrite(ST7565_PIN_A0, LOW);
+#endif
 }
 
 static inline void A0_HIGH() {
+#if defined(ARDUINO_ARCH_ESP32)
+    gpio_set_level((gpio_num_t)ST7565_PIN_A0, 1);
+#else
     digitalWrite(ST7565_PIN_A0, HIGH);
+#endif
+}
+
+static inline void SPI_BEGIN() {
+#if defined(ARDUINO_ARCH_ESP32)
+    spi->beginTransaction(SPISettings(ST7565_SPI_FREQ_HZ, MSBFIRST, SPI_MODE0));
+#endif
+}
+
+static inline void SPI_END() {
+#if defined(ARDUINO_ARCH_ESP32)
+    spi->endTransaction();
+#endif
+}
+
+static inline void ST7565_WriteByte_NoCS(uint8_t value) {
+    A0_LOW();
+    spi->transfer(value);
+}
+
+static inline void ST7565_SelectColumnAndLine_NoCS(uint8_t column, uint8_t line) {
+    A0_LOW();
+    spi->transfer(line + 176);                    // 页地址
+    spi->transfer(((column >> 4) & 0x0F) | 0x10); // 列地址高4位
+    spi->transfer((column >> 0) & 0x0F);          // 列地址低4位
 }
 
 // 硬件复位
@@ -80,28 +123,28 @@ void ST7565_HardwareReset(void) {
 
 // 写入单字节命令
 void ST7565_WriteByte(uint8_t value) {
-    A0_LOW();  // 命令模式
+    SPI_BEGIN();
     CS_LOW();
-    spi->transfer(value);
+    ST7565_WriteByte_NoCS(value);
     CS_HIGH();
+    SPI_END();
 }
 
 // 选择列和行
 void ST7565_SelectColumnAndLine(uint8_t column, uint8_t line) {
-    A0_LOW();  // 命令模式
+    SPI_BEGIN();
     CS_LOW();
-    spi->transfer(line + 176);                    // 页地址
-    spi->transfer(((column >> 4) & 0x0F) | 0x10); // 列地址高4位
-    spi->transfer((column >> 0) & 0x0F);          // 列地址低4位
+    ST7565_SelectColumnAndLine_NoCS(column, line);
     CS_HIGH();
+    SPI_END();
 }
 
 // 绘制一行数据 (内部函数)
 static void DrawLine(uint8_t column, uint8_t line, const uint8_t *lineBuffer, unsigned size_defVal) {
-    ST7565_SelectColumnAndLine(column + 4, line);
-    
-    A0_HIGH();  // 数据模式
+    SPI_BEGIN();
     CS_LOW();
+    ST7565_SelectColumnAndLine_NoCS(column + 4, line);
+    A0_HIGH();  // 数据模式
     
     if (lineBuffer) {
         // 发送缓冲区数据
@@ -120,6 +163,7 @@ static void DrawLine(uint8_t column, uint8_t line, const uint8_t *lineBuffer, un
     }
     
     CS_HIGH();
+    SPI_END();
 }
 
 // 绘制指定位置的一行
@@ -129,23 +173,96 @@ void ST7565_DrawLine(const unsigned int column, const unsigned int line, const u
 
 // 刷新整个屏幕
 void ST7565_BlitFullScreen(void) {
-    ST7565_WriteByte(0x40);  // 设置起始行
-    
+    SPI_BEGIN();
+    CS_LOW();
+    ST7565_WriteByte_NoCS(0x40);  // 设置起始行
+
+    // Pages 1..7 from gFrameBuffer[0..6]
     for (unsigned line = 0; line < FRAME_LINES; line++) {
-        DrawLine(0, line + 1, gFrameBuffer[line], LCD_WIDTH);
+        ST7565_SelectColumnAndLine_NoCS(0 + 4, static_cast<uint8_t>(line + 1));
+        A0_HIGH();
+#if defined(ARDUINO_ARCH_ESP32)
+        spi->transferBytes(gFrameBuffer[line], nullptr, LCD_WIDTH);
+#else
+        for (unsigned i = 0; i < LCD_WIDTH; i++) {
+            spi->transfer(gFrameBuffer[line][i]);
+        }
+#endif
     }
+
+    CS_HIGH();
+    SPI_END();
 }
 
 // 刷新单行
 void ST7565_BlitLine(unsigned line) {
-    ST7565_WriteByte(0x40);  // 设置起始行
-    DrawLine(0, line + 1, gFrameBuffer[line], LCD_WIDTH);
+    SPI_BEGIN();
+    CS_LOW();
+    ST7565_WriteByte_NoCS(0x40);  // 设置起始行
+    ST7565_SelectColumnAndLine_NoCS(0 + 4, static_cast<uint8_t>(line + 1));
+    A0_HIGH();
+#if defined(ARDUINO_ARCH_ESP32)
+    spi->transferBytes(gFrameBuffer[line], nullptr, LCD_WIDTH);
+#else
+    for (unsigned i = 0; i < LCD_WIDTH; i++) {
+        spi->transfer(gFrameBuffer[line][i]);
+    }
+#endif
+    CS_HIGH();
+    SPI_END();
 }
 
 // 刷新状态行
 void ST7565_BlitStatusLine(void) {
-    ST7565_WriteByte(0x40);  // 设置起始行
-    DrawLine(0, 0, gStatusLine, LCD_WIDTH);
+    SPI_BEGIN();
+    CS_LOW();
+    ST7565_WriteByte_NoCS(0x40);  // 设置起始行
+    ST7565_SelectColumnAndLine_NoCS(0 + 4, 0);
+    A0_HIGH();
+#if defined(ARDUINO_ARCH_ESP32)
+    spi->transferBytes(gStatusLine, nullptr, LCD_WIDTH);
+#else
+    for (unsigned i = 0; i < LCD_WIDTH; i++) {
+        spi->transfer(gStatusLine[i]);
+    }
+#endif
+    CS_HIGH();
+    SPI_END();
+}
+
+void ST7565_BlitAll(void) {
+    SPI_BEGIN();
+    CS_LOW();
+
+    // Set start line once.
+    ST7565_WriteByte_NoCS(0x40);
+
+    // Status line (page 0)
+    ST7565_SelectColumnAndLine_NoCS(0 + 4, 0);
+    A0_HIGH();
+#if defined(ARDUINO_ARCH_ESP32)
+    spi->transferBytes(gStatusLine, nullptr, LCD_WIDTH);
+#else
+    for (unsigned i = 0; i < LCD_WIDTH; i++) {
+        spi->transfer(gStatusLine[i]);
+    }
+#endif
+
+    // Pages 1..7
+    for (unsigned line = 0; line < FRAME_LINES; line++) {
+        ST7565_SelectColumnAndLine_NoCS(0 + 4, static_cast<uint8_t>(line + 1));
+        A0_HIGH();
+#if defined(ARDUINO_ARCH_ESP32)
+        spi->transferBytes(gFrameBuffer[line], nullptr, LCD_WIDTH);
+#else
+        for (unsigned i = 0; i < LCD_WIDTH; i++) {
+            spi->transfer(gFrameBuffer[line][i]);
+        }
+#endif
+    }
+
+    CS_HIGH();
+    SPI_END();
 }
 
 // 填充整个屏幕
@@ -172,13 +289,13 @@ void ST7565_Init(void) {
     pinMode(ST7565_PIN_CLK, OUTPUT);
     
     // 默认状态
-    digitalWrite(ST7565_PIN_CS, HIGH);
-    digitalWrite(ST7565_PIN_A0, LOW);
+    CS_HIGH();
+    A0_LOW();
     
     // 初始化SPI
     spi = new SPIClass(HSPI);
     spi->begin(ST7565_PIN_CLK, -1, ST7565_PIN_MOSI, ST7565_PIN_CS);
-    spi->setFrequency(10000000);  // 10MHz SPI时钟 (ST7565通常可更高，按需调整)
+    spi->setFrequency(ST7565_SPI_FREQ_HZ);
     spi->setDataMode(SPI_MODE0);
     spi->setBitOrder(MSBFIRST);
     

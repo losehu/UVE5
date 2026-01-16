@@ -27,9 +27,15 @@ extern "C" {
 // I2C 引脚定义
 // SDA -> IO13
 // SCL -> IO14
+#ifndef I2C_PIN_SDA
 #define I2C_PIN_SDA 13
+#endif
+#ifndef I2C_PIN_SCL
 #define I2C_PIN_SCL 14
+#endif
+#ifndef I2C_PIN_EN
 #define I2C_PIN_EN 3
+#endif
 
 // I2C 操作类型
 enum {

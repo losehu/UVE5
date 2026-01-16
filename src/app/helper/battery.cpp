@@ -13,7 +13,11 @@
  *     See the License for the specific language governing permissions and
  *     limitations under the License.
  */
+#ifndef ENABLE_OPENCV
 #include <Arduino.h>
+#else
+#include "../opencv/Arduino.hpp"
+#endif
 #include "battery.h"
 #include "driver/backlight.h"
 #include "driver/st7565.h"

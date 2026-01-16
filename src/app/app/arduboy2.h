@@ -16,6 +16,24 @@
 #define pgm_read_byte(addr) (*(const uint8_t *)(addr))
 #endif
 
+#ifndef pgm_read_word
+#define pgm_read_word(addr) (*(const uint16_t *)(addr))
+#endif
+
+// Some sketches use `pgm_read_dword` to read pointers from PROGMEM.
+// On 64-bit hosts (OpenCV build), return uintptr_t so pointer casts remain valid.
+#ifndef pgm_read_dword
+#if INTPTR_MAX > INT32_MAX
+#define pgm_read_dword(addr) ((uintptr_t)(*(const void *const *)(addr)))
+#else
+#define pgm_read_dword(addr) (*(const uint32_t *)(addr))
+#endif
+#endif
+
+#ifndef strcpy_P
+#define strcpy_P(dest, src) strcpy((dest), (src))
+#endif
+
 #ifndef WHITE
 #define WHITE 1
 #endif
@@ -29,6 +47,10 @@
 #define DOWN_BUTTON  (1U << 3)
 #define A_BUTTON     (1U << 4)
 #define B_BUTTON     (1U << 5)
+
+#ifndef ARDUBOY_DEFAULT_FPS
+#define ARDUBOY_DEFAULT_FPS 60
+#endif
 
 #ifndef RGB_ON
 #define RGB_ON 1
@@ -65,7 +87,10 @@ public:
     void begin();
     void setFrameRate(uint8_t rate);
     bool nextFrame();
+    bool everyXFrames(uint8_t frames) const;
     void initRandomSeed();
+
+    uint32_t getMillis() const;
 
     void pollButtons();
     bool pressed(uint8_t buttons) const;
@@ -74,7 +99,7 @@ public:
 
     void clear();
     void display();
-    void display(bool /*clear*/) { display(); }
+    void display(bool clear);
 
     void drawPixel(int16_t x, int16_t y, uint8_t color = WHITE);
     void drawFastHLine(int16_t x, int16_t y, int16_t w, uint8_t color = WHITE);
@@ -93,7 +118,16 @@ public:
     void drawBitmap(int16_t x, int16_t y, const uint8_t *bitmap, int16_t w, int16_t h, uint8_t color = WHITE);
 
     void setCursor(int16_t x, int16_t y);
+    void setTextSize(uint8_t size);
     void print(const char *s);
+    void println(const char *s) {
+        print(s);
+        println();
+    }
+    void println() {
+        cursorX = 0;
+        cursorY = static_cast<int16_t>(cursorY + (8 * (textSize ? textSize : 1)));
+    }
     void print(int32_t value);
     void print(uint32_t value);
 
@@ -116,8 +150,10 @@ private:
     uint8_t justReleasedButtons = 0;
     uint32_t frameDurationMs = 33;
     uint32_t lastFrameMs = 0;
+    uint32_t frameCount = 0;
     int16_t cursorX = 0;
     int16_t cursorY = 0;
+    uint8_t textSize = 1;
 
     void drawChar(int16_t x, int16_t y, char c);
 
@@ -131,6 +167,10 @@ public:
 };
 
 extern Arduboy2 arduboy;
+
+// Returns a stable buffer containing the last frame passed to Arduboy2::display().
+// This is useful when the game loop runs in a separate task.
+const uint8_t *Arduboy2_GetPresentBuffer();
 
 // Many sketches use Arduboy2Base; in this project it's the same shim.
 using Arduboy2Base = Arduboy2;

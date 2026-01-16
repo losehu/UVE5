@@ -57,6 +57,7 @@
 #include "../audio.h"
 #include "../board.h"
 #include "../driver/backlight.h"
+#include "../driver/keyboard.h"
 
 #ifdef ENABLE_FMRADIO
 #include "../driver/bk1080.h"
@@ -111,6 +112,7 @@ static bool flagSaveChannel;
 #if defined(ENABLE_ARDUBOY) || (defined(ENABLE_ARDUBOY_AVR) && (ENABLE_ARDUBOY_AVR))
 static bool gIgnoreArduboySide1Release;
 static bool gIgnoreArduboySide2Release;
+static uint8_t gFKeyChordCountdown_10ms;
 #endif
 
 static void ProcessKey(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld);
@@ -1047,6 +1049,16 @@ static void CheckKeys(void) {
     // scan the hardware keys
     KEY_Code_t Key = KEYBOARD_Poll();
 
+#if defined(ENABLE_ARDUBOY) || (defined(ENABLE_ARDUBOY_AVR) && (ENABLE_ARDUBOY_AVR))
+    // On real hardware we often only get one "current" key at a time.
+    // Latch a short "F was down" window to make chords like F+SIDE1 reliable.
+    if (Key == KEY_F) {
+        gFKeyChordCountdown_10ms = 50; // 500ms
+    } else if (gFKeyChordCountdown_10ms > 0) {
+        gFKeyChordCountdown_10ms--;
+    }
+#endif
+
     if (Key != KEY_INVALID) // any key pressed
         boot_counter_10ms = 0;   // cancel boot screen/beeps if any key pressed
 
@@ -1136,10 +1148,13 @@ void APP_TimeSlice10ms(void) {
 
     if (UART_IsCommandAvailable()) {
 
+#ifndef ENABLE_OPENCV
         portDISABLE_INTERRUPTS();
-
+#endif
         UART_HandleCommand();
+#ifndef ENABLE_OPENCV
         portENABLE_INTERRUPTS();
+#endif
     }
 #endif
     if (gReducedService)
@@ -1806,7 +1821,7 @@ static void ProcessKey(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
     }
 
 #ifdef ENABLE_ARDUBOY
-    if (gWasFKeyPressed &&
+    if ((gWasFKeyPressed || KEYBOARD_IsKeyDown(KEY_F) || gFKeyChordCountdown_10ms > 0) &&
         gScreenToDisplay == DISPLAY_MAIN &&
         Key == KEY_SIDE1 &&
         bKeyPressed &&
@@ -1815,12 +1830,12 @@ static void ProcessKey(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
         gUpdateStatus = true;
         gIgnoreArduboySide1Release = true;
         ARDUBOY_Enter();
-        return;
+        goto Skip;
     }
 #endif
 
 #if defined(ENABLE_ARDUBOY_AVR) && (ENABLE_ARDUBOY_AVR)
-    if (gWasFKeyPressed &&
+    if ((gWasFKeyPressed || KEYBOARD_IsKeyDown(KEY_F) || gFKeyChordCountdown_10ms > 0) &&
         gScreenToDisplay == DISPLAY_MAIN &&
         Key == KEY_SIDE2 &&
         bKeyPressed &&
@@ -1829,7 +1844,7 @@ static void ProcessKey(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
         gUpdateStatus = true;
         gIgnoreArduboySide2Release = true;
         ARDUBOY_AVR_Enter();
-        return;
+        goto Skip;
     }
 #endif
 

@@ -67,6 +67,7 @@ extern bool       gWasFKeyPressed;
 void KEYBOARD_Init(void);
 KEY_Code_t KEYBOARD_Poll(void);
 KEY_Code_t GetKey(void);
+bool KEYBOARD_IsKeyDown(KEY_Code_t key);
 
 #ifdef __cplusplus
 }

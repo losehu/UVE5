@@ -15,11 +15,8 @@
  */
 
 #include "i2c1.h"
-#ifndef ENABLE_OPENCV
 #include <Arduino.h>
-#else
-#include "../opencv/Arduino.hpp"
-#endif
+
 // I2C 初始化
 void I2C_Init(void) {
     // 配置引脚为输出开漏模式

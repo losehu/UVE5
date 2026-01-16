@@ -235,66 +235,66 @@
 // void loop() {
 // Serial.println("=== Test start ===\n");
 
-// digitalWrite(4,HIGH);
-// digitalWrite(5,HIGH);
-// digitalWrite(6,HIGH);
-// digitalWrite(7,HIGH);
-// digitalWrite(8,HIGH);
-// digitalWrite(45,HIGH);
+// // digitalWrite(4,HIGH);
+// // digitalWrite(5,HIGH);
+// // digitalWrite(6,HIGH);
+// // digitalWrite(7,HIGH);
+// // digitalWrite(8,HIGH);
+// // digitalWrite(45,HIGH);
 
-// digitalWrite(0,HIGH);
-// digitalWrite(1,HIGH);
-// digitalWrite(2,HIGH);
-// digitalWrite(3,HIGH);
-// digitalWrite(33,HIGH);
-// digitalWrite(34,HIGH);
-// digitalWrite(47,HIGH);
+// // digitalWrite(0,HIGH);
+// // digitalWrite(1,HIGH);
+// // digitalWrite(2,HIGH);
+// // digitalWrite(3,HIGH);
+// // digitalWrite(33,HIGH);
+// // digitalWrite(34,HIGH);
+// // digitalWrite(47,HIGH);
 
-// digitalWrite(17,HIGH);
-// digitalWrite(18,HIGH);
-// digitalWrite(21,HIGH);
-// digitalWrite(48,HIGH);
-// digitalWrite(43,HIGH);
+// // digitalWrite(17,HIGH);
+// // digitalWrite(18,HIGH);
+// // digitalWrite(21,HIGH);
+// // digitalWrite(48,HIGH);
+// // digitalWrite(43,HIGH);
 
 
 
-//   digitalWrite(9, HIGH);
-//   digitalWrite(10, HIGH);
-//   digitalWrite(11, HIGH);
-//   digitalWrite(12, HIGH);
+// //   digitalWrite(9, HIGH);
+// //   digitalWrite(10, HIGH);
+// //   digitalWrite(11, HIGH);
+// //   digitalWrite(12, HIGH);
 //   digitalWrite(13, HIGH);
 //   digitalWrite(14, HIGH);
-//   digitalWrite(44, HIGH);
+// //   digitalWrite(44, HIGH);
 //   delay(1000);
-// digitalWrite(4,LOW);
-// digitalWrite(5,LOW);
-// digitalWrite(6,LOW);
-// digitalWrite(7,LOW);
-// digitalWrite(8,LOW);
-// digitalWrite(45,LOW);
+// // digitalWrite(4,LOW);
+// // digitalWrite(5,LOW);
+// // digitalWrite(6,LOW);
+// // digitalWrite(7,LOW);
+// // digitalWrite(8,LOW);
+// // digitalWrite(45,LOW);
 
-// digitalWrite(0,LOW);
-// digitalWrite(1,LOW);
-// digitalWrite(2,LOW);
-// digitalWrite(3,LOW);
-// digitalWrite(33,LOW);
-// digitalWrite(34,LOW);
-// digitalWrite(47,LOW);
+// // digitalWrite(0,LOW);
+// // digitalWrite(1,LOW);
+// // digitalWrite(2,LOW);
+// // digitalWrite(3,LOW);
+// // digitalWrite(33,LOW);
+// // digitalWrite(34,LOW);
+// // digitalWrite(47,LOW);
 
-// digitalWrite(17,LOW);
-// digitalWrite(18,LOW);
-// digitalWrite(21,LOW);
-// digitalWrite(48,LOW);
-// digitalWrite(43,LOW);
+// // digitalWrite(17,LOW);
+// // digitalWrite(18,LOW);
+// // digitalWrite(21,LOW);
+// // digitalWrite(48,LOW);
+// // digitalWrite(43,LOW);
 
 
-//   digitalWrite(9, LOW);
-//   digitalWrite(10, LOW);
-//   digitalWrite(11, LOW);
-//   digitalWrite(12, LOW);
+// //   digitalWrite(9, LOW);
+// //   digitalWrite(10, LOW);
+// //   digitalWrite(11, LOW);
+// //   digitalWrite(12, LOW);
 //   digitalWrite(13, LOW);
 //   digitalWrite(14, LOW);
-//   digitalWrite(44, LOW);
+// //   digitalWrite(44, LOW);
 //   delay(1000);
 
 

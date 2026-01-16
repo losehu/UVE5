@@ -25,6 +25,18 @@ KEY_Code_t gKeyReading1 = KEY_INVALID;
 uint16_t gDebounceCounter = 0;
 bool gWasFKeyPressed = false;
 
+static uint32_t gKeyDownMask = 0;
+
+#ifndef ENABLE_OPENCV
+extern "C" bool KEYBOARD_IsKeyDown(KEY_Code_t key)
+{
+    if (key < 0 || key >= KEY_INVALID) {
+        return false;
+    }
+    return (gKeyDownMask & (1u << static_cast<unsigned>(key))) != 0;
+}
+#endif
+
 #ifdef ENABLE_OPENCV
 static KEY_Code_t MapOpenCVKey(int key)
 {
@@ -90,13 +102,56 @@ static KEY_Code_t MapOpenCVKey(int key)
     return KEY_INVALID;
 }
 
+static int KeyToOpenCVKey(KEY_Code_t key)
+{
+    switch (key) {
+    case KEY_SIDE1:
+        return GLFW_KEY_LEFT_BRACKET;
+    case KEY_SIDE2:
+        return GLFW_KEY_RIGHT_BRACKET;
+    case KEY_EXIT:
+        return GLFW_KEY_ESCAPE;
+    case KEY_MENU:
+        return GLFW_KEY_ENTER;
+    case KEY_PTT:
+        return GLFW_KEY_SPACE;
+    case KEY_F:
+        return GLFW_KEY_MINUS;
+    case KEY_STAR:
+        return GLFW_KEY_EQUAL;
+    default:
+        break;
+    }
+    return -1;
+}
+
+extern "C" bool KEYBOARD_IsKeyDown(KEY_Code_t key)
+{
+    const int cvKey = KeyToOpenCVKey(key);
+    if (cvKey < 0) {
+        return false;
+    }
+    return OPENCV_IsKeyDown(cvKey) != 0;
+}
+
 void KEYBOARD_Init(void)
 {
 }
 
 KEY_Code_t KEYBOARD_Poll(void)
 {
-    KEY_Code_t get_key=MapOpenCVKey(OPENCV_PollKey());
+    const int polled = OPENCV_PollKey();
+    KEY_Code_t get_key = MapOpenCVKey(polled);
+
+    // Best-effort key-down tracking for combos.
+    // (On desktop we can query instantaneous key state via GLFW.)
+    uint32_t mask = 0;
+    for (int k = 0; k < KEY_INVALID; ++k) {
+        if (KEYBOARD_IsKeyDown(static_cast<KEY_Code_t>(k))) {
+            mask |= (1u << static_cast<unsigned>(k));
+        }
+    }
+    gKeyDownMask = mask;
     return get_key;
 }
 
@@ -219,6 +274,7 @@ static inline void delay_us(uint32_t us) {
 // Poll keyboard matrix
 KEY_Code_t KEYBOARD_Poll(void) {
     KEY_Code_t Key = KEY_INVALID;
+    uint32_t pressedMask = 0;
     
     // Scan through each column configuration
     for (unsigned int col = 0; col < sizeof(keyboard_matrix) / sizeof(keyboard_matrix[0]); col++) {
@@ -265,16 +321,18 @@ KEY_Code_t KEYBOARD_Poll(void) {
             break;
         }
         
-        // Check which row pin is pressed (active low)
+        // Collect all pressed keys for this column.
         for (unsigned int row = 0; row < 4; row++) {
-            if (current_state & (1 << row)) {
-                Key = keyboard_matrix[col].rows[row].key;
-                break;
+            if ((current_state & (1 << row)) == 0) {
+                continue;
             }
-        }
-        
-        if (Key != KEY_INVALID) {
-            break;
+            const KEY_Code_t k = keyboard_matrix[col].rows[row].key;
+            if (k != KEY_INVALID) {
+                pressedMask |= (1u << static_cast<unsigned>(k));
+                if (Key == KEY_INVALID) {
+                    Key = k;
+                }
+            }
         }
     }
     
@@ -287,6 +345,7 @@ KEY_Code_t KEYBOARD_Poll(void) {
     gpio_set_level(GPIO_KEY6, 0);
     gpio_set_level(GPIO_KEY7, 1);
     
+    gKeyDownMask = pressedMask;
     return Key;
 }
 

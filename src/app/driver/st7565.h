@@ -36,6 +36,13 @@ extern "C" {
 #define ST7565_PIN_CLK  6
 #define ST7565_PIN_A0   5
 
+#ifndef ST7565_SPI_FREQ_HZ
+// NOTE: 提高默认 SPI 频率以提升刷新速度。
+// 若你的屏幕/走线在高频下不稳定，可在 platformio.ini 里通过 build_flags 覆盖：
+//   -DST7565_SPI_FREQ_HZ=10000000
+#define ST7565_SPI_FREQ_HZ 20000000
+#endif
+
 // LCD尺寸定义
 #define LCD_WIDTH       128
 #define LCD_HEIGHT       64
@@ -54,6 +61,8 @@ void ST7565_DrawLine(const unsigned int column, const unsigned int line, const u
 void ST7565_BlitFullScreen(void);
 void ST7565_BlitLine(unsigned line);
 void ST7565_BlitStatusLine(void);
+// Blit status line + full screen in one burst/transaction (faster).
+void ST7565_BlitAll(void);
 void ST7565_FillScreen(uint8_t value);
 void ST7565_FixInterfGlitch(void);
 
