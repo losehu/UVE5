@@ -40,7 +40,7 @@
 #ifdef ENABLE_ARDUBOY
 #include "ui/arduboy.h"
 #endif
-#ifdef ENABLE_ARDUBOY_AVR
+#if defined(ENABLE_ARDUBOY_AVR) && (ENABLE_ARDUBOY_AVR)
 #include "ui/arduboy_avr.h"
 #endif
 
@@ -68,7 +68,7 @@ void (*UI_DisplayFunctions[])(void) = {
 #ifdef ENABLE_ARDUBOY
         [DISPLAY_ARDUBOY] = &UI_DisplayArduboy,
 #endif
-#ifdef ENABLE_ARDUBOY_AVR
+#if defined(ENABLE_ARDUBOY_AVR) && (ENABLE_ARDUBOY_AVR)
         [DISPLAY_ARDUBOY_AVR] = &UI_DisplayArduboyAvr,
 #endif
 

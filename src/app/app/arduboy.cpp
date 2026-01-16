@@ -305,6 +305,12 @@ static void Snake_Loop(void) {
 static ArduboyGame gArduboyGames[] = {
     {"PONG", &Pong_Init, &Pong_Loop},
     {"SNAKE", &Snake_Init, &Snake_Loop},
+#ifdef ENABLE_SQUID_JUMP
+    {"SQUID", &SquidJump_Init, &SquidJump_Loop},
+#endif
+#ifdef ENABLE_COTD
+    {"COTD", &Catacombs_Init, &Catacombs_Loop},
+#endif
 };
 
 static const int gArduboyGameCount = sizeof(gArduboyGames) / sizeof(gArduboyGames[0]);
@@ -360,7 +366,8 @@ void ARDUBOY_ProcessKeys(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
         if (bKeyPressed) {
             return;
         }
-        if (Key == KEY_UP || Key == KEY_2) {
+        // Menu navigation uses keypad 2/8; the dedicated UP/DOWN keys are A/B.
+        if (Key == KEY_2) {
             gArduboySelected--;
             if (gArduboySelected < 0) {
                 gArduboySelected = gArduboyGameCount - 1;
@@ -368,7 +375,7 @@ void ARDUBOY_ProcessKeys(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
             gUpdateDisplay = true;
             return;
         }
-        if (Key == KEY_DOWN || Key == KEY_8) {
+        if (Key == KEY_8) {
             gArduboySelected++;
             if (gArduboySelected >= gArduboyGameCount) {
                 gArduboySelected = 0;
@@ -376,7 +383,8 @@ void ARDUBOY_ProcessKeys(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
             gUpdateDisplay = true;
             return;
         }
-        if (Key == KEY_MENU || Key == KEY_SIDE1 || Key == KEY_PTT) {
+        // Start game with A (UP key) or the usual confirm keys.
+        if (Key == KEY_UP || Key == KEY_MENU || Key == KEY_SIDE1 || Key == KEY_PTT) {
             ArduboyStartGame(gArduboySelected);
             return;
         }

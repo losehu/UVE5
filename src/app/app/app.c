@@ -97,7 +97,7 @@
 #ifdef ENABLE_ARDUBOY
 #include "arduboy.h"
 #endif
-#ifdef ENABLE_ARDUBOY_AVR
+#if defined(ENABLE_ARDUBOY_AVR) && (ENABLE_ARDUBOY_AVR)
 #include "arduboy_avr.h"
 #endif
 
@@ -108,7 +108,7 @@ uint8_t gPlayMSGRingCount = 0;
 static bool flagSaveVfo;
 static bool flagSaveSettings;
 static bool flagSaveChannel;
-#if defined(ENABLE_ARDUBOY) || defined(ENABLE_ARDUBOY_AVR)
+#if defined(ENABLE_ARDUBOY) || (defined(ENABLE_ARDUBOY_AVR) && (ENABLE_ARDUBOY_AVR))
 static bool gIgnoreArduboySide1Release;
 static bool gIgnoreArduboySide2Release;
 #endif
@@ -124,7 +124,7 @@ void (*ProcessKeysFunctions[])(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) 
 #ifdef ENABLE_ARDUBOY
         [DISPLAY_ARDUBOY] = &ARDUBOY_ProcessKeys,
 #endif
-#ifdef ENABLE_ARDUBOY_AVR
+#if defined(ENABLE_ARDUBOY_AVR) && (ENABLE_ARDUBOY_AVR)
         [DISPLAY_ARDUBOY_AVR] = &ARDUBOY_AVR_ProcessKeys,
 #endif
 
@@ -1145,7 +1145,7 @@ void APP_TimeSlice10ms(void) {
     if (gReducedService)
         return;
 
-#ifdef ENABLE_ARDUBOY_AVR
+#if defined(ENABLE_ARDUBOY_AVR) && (ENABLE_ARDUBOY_AVR)
     if (gScreenToDisplay == DISPLAY_ARDUBOY_AVR) {
         CheckKeys();
         ARDUBOY_AVR_TimeSlice10ms();
@@ -1289,7 +1289,7 @@ gAlarmState = ALARM_STATE_SITE_ALARM;
     if (gScreenToDisplay == DISPLAY_ARDUBOY)
         ARDUBOY_TimeSlice10ms();
 #endif
-#ifdef ENABLE_ARDUBOY_AVR
+#if defined(ENABLE_ARDUBOY_AVR) && (ENABLE_ARDUBOY_AVR)
     if (gScreenToDisplay == DISPLAY_ARDUBOY_AVR)
         ARDUBOY_AVR_TimeSlice10ms();
 #endif
@@ -1805,7 +1805,7 @@ static void ProcessKey(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
         }
     }
 
-#ifdef ENABLE_ARDUBOY_AVR
+#ifdef ENABLE_ARDUBOY
     if (gWasFKeyPressed &&
         gScreenToDisplay == DISPLAY_MAIN &&
         Key == KEY_SIDE1 &&
@@ -1814,11 +1814,12 @@ static void ProcessKey(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
         gWasFKeyPressed = false;
         gUpdateStatus = true;
         gIgnoreArduboySide1Release = true;
-        ARDUBOY_AVR_Enter();
+        ARDUBOY_Enter();
         return;
     }
 #endif
-#ifdef ENABLE_ARDUBOY
+
+#if defined(ENABLE_ARDUBOY_AVR) && (ENABLE_ARDUBOY_AVR)
     if (gWasFKeyPressed &&
         gScreenToDisplay == DISPLAY_MAIN &&
         Key == KEY_SIDE2 &&
@@ -1827,7 +1828,7 @@ static void ProcessKey(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
         gWasFKeyPressed = false;
         gUpdateStatus = true;
         gIgnoreArduboySide2Release = true;
-        ARDUBOY_Enter();
+        ARDUBOY_AVR_Enter();
         return;
     }
 #endif
@@ -1906,7 +1907,7 @@ static void ProcessKey(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
 #ifdef ENABLE_ARDUBOY
                 || gScreenToDisplay == DISPLAY_ARDUBOY
 #endif
-#ifdef ENABLE_ARDUBOY_AVR
+#if defined(ENABLE_ARDUBOY_AVR) && (ENABLE_ARDUBOY_AVR)
                 || gScreenToDisplay == DISPLAY_ARDUBOY_AVR
 #endif
                 || (Key != KEY_SIDE1 && Key != KEY_SIDE2))) {

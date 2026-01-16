@@ -34,7 +34,7 @@ enum GUI_DisplayType_t
 #ifdef ENABLE_ARDUBOY
     DISPLAY_ARDUBOY,
 #endif
-#ifdef ENABLE_ARDUBOY_AVR
+#if defined(ENABLE_ARDUBOY_AVR) && (ENABLE_ARDUBOY_AVR)
     DISPLAY_ARDUBOY_AVR,
 #endif
 

@@ -42,6 +42,14 @@ void Arduboy2::begin() {
     lastFrameMs = arduboy_millis();
 }
 
+void Arduboy2::initRandomSeed() {
+#ifdef ENABLE_OPENCV
+    // Deterministic by default in simulator.
+#else
+    randomSeed(static_cast<uint32_t>(micros()) ^ static_cast<uint32_t>(millis()));
+#endif
+}
+
 void Arduboy2::setFrameRate(uint8_t rate) {
     if (rate == 0) {
         rate = 30;
@@ -69,7 +77,10 @@ void Arduboy2::pollButtons() {
 }
 
 bool Arduboy2::pressed(uint8_t buttons) const {
-    return (currentButtons & buttons) == buttons;
+    // Some upstream sketches call pressed() without ever calling pollButtons().
+    // Use the raw button state so input still works; justPressed/justReleased
+    // continue to require pollButtons() as usual.
+    return (rawButtons & buttons) == buttons;
 }
 
 bool Arduboy2::justPressed(uint8_t buttons) const {
@@ -87,6 +98,106 @@ void Arduboy2::clear() {
 void Arduboy2::display() {
     gArduboyFrameReady = true;
     gUpdateDisplay = true;
+}
+
+void Arduboy2::digitalWriteRGB(uint8_t r, uint8_t g, uint8_t b) {
+    (void)r;
+    (void)g;
+    (void)b;
+}
+
+static void DrawSpriteOverwrite(int16_t x, int16_t y, const uint8_t *bitmap, uint8_t frame, const uint8_t *mask, uint8_t mask_frame, bool self_masked) {
+    if (!bitmap) {
+        return;
+    }
+    const uint8_t w = pgm_read_byte(bitmap + 0);
+    const uint8_t h = pgm_read_byte(bitmap + 1);
+    if (w == 0 || h == 0) {
+        return;
+    }
+    const uint16_t bytes_per_frame = static_cast<uint16_t>(w) * ((static_cast<uint16_t>(h) + 7) / 8);
+    const uint8_t *bmp = bitmap + 2 + bytes_per_frame * frame;
+    const uint8_t *msk = nullptr;
+    if (mask) {
+        const uint8_t mw = pgm_read_byte(mask + 0);
+        const uint8_t mh = pgm_read_byte(mask + 1);
+        if (mw == w && mh == h) {
+            msk = mask + 2 + bytes_per_frame * mask_frame;
+        }
+    }
+
+    for (uint8_t sx = 0; sx < w; ++sx) {
+        for (uint8_t sy = 0; sy < h; ++sy) {
+            const uint16_t bit_index = static_cast<uint16_t>(sx) + static_cast<uint16_t>(sy / 8) * w;
+            const uint8_t bit_mask = static_cast<uint8_t>(1U << (sy & 7));
+            const bool pixel_on = (pgm_read_byte(bmp + bit_index) & bit_mask) != 0;
+            bool write = true;
+            if (msk) {
+                const bool mask_on = (pgm_read_byte(msk + bit_index) & bit_mask) != 0;
+                write = mask_on;
+            } else if (self_masked) {
+                write = pixel_on;
+            }
+
+            if (!write) {
+                continue;
+            }
+
+            if (self_masked) {
+                arduboy.drawPixel(static_cast<int16_t>(x + sx), static_cast<int16_t>(y + sy), WHITE);
+            } else {
+                arduboy.drawPixel(static_cast<int16_t>(x + sx), static_cast<int16_t>(y + sy), pixel_on ? WHITE : BLACK);
+            }
+        }
+    }
+}
+
+void Sprites::drawOverwrite(int16_t x, int16_t y, const uint8_t *bitmap, uint8_t frame) {
+    DrawSpriteOverwrite(x, y, bitmap, frame, nullptr, 0, false);
+}
+
+void Sprites::drawSelfMasked(int16_t x, int16_t y, const uint8_t *bitmap, uint8_t frame) {
+    DrawSpriteOverwrite(x, y, bitmap, frame, nullptr, 0, true);
+}
+
+void Sprites::drawExternalMask(int16_t x, int16_t y, const uint8_t *bitmap, const uint8_t *mask, uint8_t frame, uint8_t mask_frame) {
+    DrawSpriteOverwrite(x, y, bitmap, frame, mask, mask_frame, false);
+}
+
+static void DrawSpritePlusMask(int16_t x, int16_t y, const uint8_t *bitmap, uint8_t frame) {
+    if (!bitmap) {
+        return;
+    }
+    const uint8_t w = pgm_read_byte(bitmap + 0);
+    const uint8_t h = pgm_read_byte(bitmap + 1);
+    if (w == 0 || h == 0) {
+        return;
+    }
+
+    const uint16_t bytes_per_frame = static_cast<uint16_t>(w) * ((static_cast<uint16_t>(h) + 7) / 8);
+    // Plus-mask format stores image+mask interleaved: (img0, msk0, img1, msk1, ...)
+    const uint8_t *data = bitmap + 2 + static_cast<uint32_t>(frame) * bytes_per_frame * 2U;
+
+    for (uint8_t sx = 0; sx < w; ++sx) {
+        for (uint8_t sy = 0; sy < h; ++sy) {
+            const uint16_t bit_index = static_cast<uint16_t>(sx) + static_cast<uint16_t>(sy / 8) * w;
+            const uint8_t bit_mask = static_cast<uint8_t>(1U << (sy & 7));
+
+            const uint8_t img_byte = pgm_read_byte(data + bit_index * 2U);
+            const uint8_t msk_byte = pgm_read_byte(data + bit_index * 2U + 1U);
+
+            const bool mask_on = (msk_byte & bit_mask) != 0;
+            if (!mask_on) {
+                continue;
+            }
+            const bool pixel_on = (img_byte & bit_mask) != 0;
+            arduboy.drawPixel(static_cast<int16_t>(x + sx), static_cast<int16_t>(y + sy), pixel_on ? WHITE : BLACK);
+        }
+    }
+}
+
+void Sprites::drawPlusMask(int16_t x, int16_t y, const uint8_t *bitmap, uint8_t frame) {
+    DrawSpritePlusMask(x, y, bitmap, frame);
 }
 
 void Arduboy2::drawPixel(int16_t x, int16_t y, uint8_t color) {

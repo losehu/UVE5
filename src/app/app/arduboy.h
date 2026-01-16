@@ -16,6 +16,16 @@ void ARDUBOY_TimeSlice10ms(void);
 void ARDUBOY_ProcessKeys(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld);
 void ARDUBOY_Render(void);
 
+#ifdef ENABLE_SQUID_JUMP
+void SquidJump_Init(void);
+void SquidJump_Loop(void);
+#endif
+
+#ifdef ENABLE_COTD
+void Catacombs_Init(void);
+void Catacombs_Loop(void);
+#endif
+
 #ifdef __cplusplus
 }
 #endif

@@ -48,7 +48,7 @@ void UI_DisplayStatus() {
     if (gScreenToDisplay == DISPLAY_ARDUBOY)
         return;
 #endif
-#ifdef ENABLE_ARDUBOY_AVR
+#if defined(ENABLE_ARDUBOY_AVR) && (ENABLE_ARDUBOY_AVR)
     if (gScreenToDisplay == DISPLAY_ARDUBOY_AVR)
         return;
 #endif

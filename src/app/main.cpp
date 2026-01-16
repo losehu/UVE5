@@ -82,7 +82,7 @@
 #include "driver/eeprom.h"
 #include "driver/st7565.h"
 
-#ifdef ENABLE_ARDUBOY_AVR
+#if defined(ENABLE_ARDUBOY_AVR) && (ENABLE_ARDUBOY_AVR)
 #include "app/arduboy_avr.h"
 #endif
 
@@ -194,7 +194,7 @@ void loop() {
 
     gUpdateStatus = true;
 
-#if defined(ENABLE_OPENCV) && defined(ENABLE_ARDUBOY_AVR)
+#if defined(ENABLE_OPENCV) && defined(ENABLE_ARDUBOY_AVR) && (ENABLE_ARDUBOY_AVR)
     {
         static bool did_autorun = false;
         const char *env = std::getenv("UVE5_ARDUBOY_AVR_AUTORUN");

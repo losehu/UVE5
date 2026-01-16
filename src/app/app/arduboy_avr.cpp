@@ -1,3 +1,5 @@
+#if defined(ENABLE_ARDUBOY_AVR) && (ENABLE_ARDUBOY_AVR)
+
 #include "arduboy_avr.h"
 
 #include "arduboy2.h"
@@ -1903,3 +1905,5 @@ void ARDUBOY_AVR_Render(void) {
         ssd1306_set_flag(&gArduboyDisplay, SSD1306_FLAG_DIRTY, 0);
     }
 }
+
+#endif  // defined(ENABLE_ARDUBOY_AVR) && (ENABLE_ARDUBOY_AVR)
