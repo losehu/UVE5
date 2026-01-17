@@ -3,6 +3,7 @@
 #ifndef ENABLE_OPENCV
 #include <Arduino.h>
 #include "esp_partition.h"
+#include "esp_ota_ops.h"
 
 
 #ifndef SHARED_SUBTYPE
@@ -85,7 +86,7 @@ inline bool shared_write(size_t offset, const void* data, size_t len) {
   free(sector_buf);
   return true;
 }
-void switch_to_factory_and_restart() {
+static inline void switch_to_factory_and_restart() {
   const esp_partition_t* part = esp_partition_find_first(
       ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_FACTORY, "factory");
   if (part) {

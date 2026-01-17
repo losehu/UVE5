@@ -45,6 +45,10 @@
 #include "../misc.h"
 #include "../settings.h"
 
+#if defined(ARDUINO_ARCH_ESP32) && !defined(ENABLE_OPENCV)
+#include "../shared_flash_c.h"
+#endif
+
 #if defined(ENABLE_OVERLAY)
 #include "../sram-overlay.h"
 #endif
@@ -727,6 +731,109 @@ static void CMD_0538(const uint8_t *pBuffer)//write
 }
 #endif
 
+static uint32_t UART_CmdAddr24_From052B(const CMD_052B_t *pCmd)
+{
+    return ((uint32_t)pCmd->Offset << 16) | ((uint32_t)pCmd->ADD[1] << 8) | (uint32_t)pCmd->ADD[0];
+}
+
+static uint32_t UART_CmdAddr24_From051D(const CMD_051D_t *pCmd)
+{
+    if (pCmd->Size < 2) {
+        return ((uint32_t)pCmd->Offset << 16);
+    }
+    return ((uint32_t)pCmd->Offset << 16) | ((uint32_t)pCmd->Data[1] << 8) | (uint32_t)pCmd->Data[0];
+}
+
+// 0x142B: read from ESP32 shared flash partition (format compatible with 0x052B)
+static void CMD_142B(const uint8_t *pBuffer)
+{
+    const CMD_052B_t *pCmd = (const CMD_052B_t *)pBuffer;
+    REPLY_051B_t Reply;
+
+    if (pCmd->Timestamp != Timestamp)
+        return;
+
+    gSerialConfigCountDown_500ms = 12; // 6 sec
+
+    Reply.Header.ID = 0x051C;
+
+    uint8_t size = pCmd->Size;
+    if (size > (uint8_t)sizeof(Reply.Data.Data))
+        size = (uint8_t)sizeof(Reply.Data.Data);
+
+    Reply.Header.Size = (uint16_t)size + 4U;
+    Reply.Data.Offset = pCmd->Offset;
+    Reply.Data.Size = size;
+
+    const uint32_t addr = UART_CmdAddr24_From052B(pCmd);
+
+#if defined(ARDUINO_ARCH_ESP32) && !defined(ENABLE_OPENCV)
+    // shared 分区只有 4KB
+    if (addr >= 0x1000U) {
+        memset(Reply.Data.Data, 0, size);
+    } else {
+        uint8_t rd = size;
+        if ((uint32_t)rd > (0x1000U - addr)) {
+            rd = (uint8_t)(0x1000U - addr);
+        }
+        if (!shared_read_c(addr, Reply.Data.Data, rd)) {
+            memset(Reply.Data.Data, 0, rd);
+        }
+        if (rd < size) {
+            memset(Reply.Data.Data + rd, 0, (size_t)(size - rd));
+        }
+    }
+#else
+    // Fallback (non-ESP32 builds): behave like EEPROM read at the same address.
+    EEPROM_ReadBuffer(addr, Reply.Data.Data, size);
+#endif
+
+    SendReply(&Reply, (uint16_t)size + 8U);
+}
+
+// 0x1438: write to ESP32 shared flash partition (format compatible with 0x0538)
+static void CMD_1438(const uint8_t *pBuffer)
+{
+    const CMD_051D_t *pCmd = (const CMD_051D_t *)pBuffer;
+    REPLY_051D_t Reply;
+
+    if (pCmd->Timestamp != Timestamp)
+        return;
+
+    gSerialConfigCountDown_500ms = 12; // 6 sec
+
+    Reply.Header.ID = 0x051E;
+    Reply.Header.Size = sizeof(Reply.Data);
+    Reply.Data.Offset = pCmd->Offset;
+
+    const uint32_t addr = UART_CmdAddr24_From051D(pCmd);
+    const uint32_t data_len = (pCmd->Size >= 2) ? (uint32_t)pCmd->Size - 2U : 0U;
+
+#if defined(ARDUINO_ARCH_ESP32) && !defined(ENABLE_OPENCV)
+    if (data_len > 0U && addr < 0x1000U) {
+        uint32_t wr = data_len;
+        if (wr > (0x1000U - addr)) {
+            wr = (0x1000U - addr);
+        }
+        (void)shared_write_c(addr, &pCmd->Data[2], (size_t)wr);
+    }
+#else
+    // Fallback (non-ESP32 builds): behave like EEPROM write at the same address.
+    if (data_len > 0U) {
+        // Reuse the 8-byte chunking style from the original 0x0538 implementation.
+        uint32_t written = 0;
+        while (written < data_len) {
+            const uint8_t chunk = (uint8_t)((data_len - written) >= 8U ? 8U : (data_len - written));
+            EEPROM_WriteBuffer(addr + written, &pCmd->Data[2 + written], chunk);
+            written += chunk;
+        }
+        SETTINGS_InitEEPROM();
+    }
+#endif
+
+    SendReply(&Reply, sizeof(Reply));
+}
+
 #ifdef ENABLE_DOCK
 static void CMD_0801(const uint8_t *pBuffer)
     {
@@ -752,6 +859,14 @@ void UART_HandleCommand(void) {
             CMD_0538(UART_Command.Buffer);
             break;
 #endif
+
+        case 0x142B: // flash read (shared partition)
+            CMD_142B(UART_Command.Buffer);
+            break;
+
+        case 0x1438: // flash write (shared partition)
+            CMD_1438(UART_Command.Buffer);
+            break;
 #ifdef ENABLE_DOCK
         case 0x0801:
             CMD_0801(UART_Command.Buffer);

@@ -19,6 +19,20 @@
 #include <Arduino.h>
 #include <string.h>
 
+#if defined(ARDUINO_ARCH_ESP32) && !defined(ENABLE_OPENCV)
+#include "../../lib/shared_flash.h"
+
+static inline bool EEPROM_IsWelcomeWindow(uint32_t address)
+{
+    return address >= 0x02000 && (address - 0x02000) < 0x1000;
+}
+
+static inline uint32_t EEPROM_WelcomeWindowToSharedOffset(uint32_t address)
+{
+    return address - 0x02000;
+}
+#endif
+
 static inline uint8_t EEPROM_ControlByteWrite(uint32_t Address)
 {
     return (uint8_t)(EEPROM_DEVICE_BASE_ADDR | (((Address >> 16) & 0x07U) << 1));
@@ -47,6 +61,15 @@ void EEPROM_Init(void) {
 
 
 void EEPROM_ReadBuffer(uint32_t Address, void *pBuffer, uint8_t Size) {
+
+#if defined(ARDUINO_ARCH_ESP32) && !defined(ENABLE_OPENCV)
+    if (EEPROM_IsWelcomeWindow(Address)) {
+        if (!shared_read(EEPROM_WelcomeWindowToSharedOffset(Address), pBuffer, Size)) {
+            memset(pBuffer, 0, Size);
+        }
+        return;
+    }
+#endif
 
     noInterrupts();
     I2C_Start();
@@ -103,6 +126,23 @@ bool EEPROM_Probe(uint32_t Address)
 }
 
 void EEPROM_WriteBuffer(uint32_t Address, const void *pBuffer, uint8_t WRITE_SIZE) {
+
+#if defined(ARDUINO_ARCH_ESP32) && !defined(ENABLE_OPENCV)
+    if (EEPROM_IsWelcomeWindow(Address)) {
+        uint8_t buffer[128];
+        if (WRITE_SIZE > sizeof(buffer)) {
+            return;
+        }
+
+        if (!shared_read(EEPROM_WelcomeWindowToSharedOffset(Address), buffer, WRITE_SIZE)) {
+            memset(buffer, 0, WRITE_SIZE);
+        }
+        if (memcmp(pBuffer, buffer, WRITE_SIZE) != 0) {
+            (void)shared_write(EEPROM_WelcomeWindowToSharedOffset(Address), pBuffer, WRITE_SIZE);
+        }
+        return;
+    }
+#endif
 
 
     uint8_t buffer[128];

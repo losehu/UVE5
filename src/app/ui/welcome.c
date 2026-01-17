@@ -27,6 +27,28 @@
 #include "../version.h"
 #include "../driver/system.h"
 
+#if defined(ARDUINO_ARCH_ESP32) && !defined(ENABLE_OPENCV)
+#include "../shared_flash_c.h"
+#endif
+
+static void Welcome_ReadBuffer(uint32_t address, void *buffer, uint8_t size)
+{
+#if defined(ARDUINO_ARCH_ESP32) && !defined(ENABLE_OPENCV)
+    // Map the welcome resources from the radio's logical EEPROM window
+    // [0x02000..0x02FFF] into ESP32's 4KB shared partition.
+    if (address >= 0x02000 && (uint32_t)(address - 0x02000) < 0x1000) {
+        if (!shared_read_c(address - 0x02000, buffer, size)) {
+            memset(buffer, 0, size);
+        }
+        return;
+    }
+
+    EEPROM_ReadBuffer(address, buffer, size);
+#else
+    EEPROM_ReadBuffer(address, buffer, size);
+#endif
+}
+
 
 void UI_DisplayWelcome(void) {
 
@@ -37,23 +59,38 @@ void UI_DisplayWelcome(void) {
     UI_DisplayClear();
     ST7565_BlitStatusLine();  // blank status line
     ST7565_BlitFullScreen();
+
 #if ENABLE_CHINESE_FULL == 4
-
     if (gEeprom.POWER_ON_DISPLAY_MODE == POWER_ON_DISPLAY_MODE_MESSAGE) {
+        uint8_t welcome_len[2];
+        Welcome_ReadBuffer(0x02024, welcome_len, 2);
+        welcome_len[0] = welcome_len[0] > 18 ? 0 : welcome_len[0];
+        welcome_len[1] = welcome_len[1] > 18 ? 0 : welcome_len[1];
+        Welcome_ReadBuffer(0x02000, WelcomeString0, welcome_len[0]);
+        Welcome_ReadBuffer(0x02012, WelcomeString1, welcome_len[1]);
 
-    uint8_t welcome_len[2];
-    EEPROM_ReadBuffer(0x02024, welcome_len, 2) ;
-    welcome_len[0]=welcome_len[0]>18?0:welcome_len[0];
-    welcome_len[1]=welcome_len[1]>18?0:welcome_len[1];
-    EEPROM_ReadBuffer(0x02000, WelcomeString0, welcome_len[0]) ;
-    EEPROM_ReadBuffer(0x02012, WelcomeString1, welcome_len[1]);
+        UI_PrintStringSmall(WelcomeString0, 0, 127, 0);
+        UI_PrintStringSmall(WelcomeString1, 0, 127, 2);
+        sprintf(WelcomeString1, "%u.%02uV %u%%",
+                gBatteryVoltageAverage / 100,
+                gBatteryVoltageAverage % 100,
+                BATTERY_VoltsToPercent(gBatteryVoltageAverage));
+        UI_PrintStringSmall(WelcomeString1, 0, 127, 4);
+        UI_PrintStringSmall(Version, 0, 127, 6);
+    }
+    else if (gEeprom.POWER_ON_DISPLAY_MODE == POWER_ON_DISPLAY_MODE_PIC)
+    {
+        Welcome_ReadBuffer(0x02080, gStatusLine, 128);
+        for (int i = 0; i < 7; ++i) {
+            Welcome_ReadBuffer(0x02080 + 128 + 128 * i, &gFrameBuffer[i], 128);
+        }
+    }
 
 #elif ENABLE_CHINESE_FULL == 0
 
-    EEPROM_ReadBuffer(0x0EB0, WelcomeString0, 16);
-    EEPROM_ReadBuffer(0x0EC0, WelcomeString1, 16);
+    Welcome_ReadBuffer(0x0EB0, WelcomeString0, 16);
+    Welcome_ReadBuffer(0x0EC0, WelcomeString1, 16);
 
-#endif
     UI_PrintStringSmall(WelcomeString0, 0, 127, 0);
     UI_PrintStringSmall(WelcomeString1, 0, 127, 2);
     sprintf(WelcomeString1, "%u.%02uV %u%%",
@@ -62,13 +99,6 @@ void UI_DisplayWelcome(void) {
             BATTERY_VoltsToPercent(gBatteryVoltageAverage));
     UI_PrintStringSmall(WelcomeString1, 0, 127, 4);
     UI_PrintStringSmall(Version, 0, 127, 6);
-#if ENABLE_CHINESE_FULL == 4
-    }
-    else if(gEeprom.POWER_ON_DISPLAY_MODE == POWER_ON_DISPLAY_MODE_PIC)
-        {
-             EEPROM_ReadBuffer( 0x02080, gStatusLine, 128);
-    for (int i = 0; i < 7; ++i)  EEPROM_ReadBuffer(0x02080+128+128*i, &gFrameBuffer[i], 128);
-        }
 
 #endif
 
