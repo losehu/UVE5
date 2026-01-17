@@ -43,10 +43,20 @@ static const uint8_t ST7565_CMD_DISPLAY_ON_OFF = 0xAE;
 static SPIClass* spi = nullptr;
 
 // 初始化命令序列
+// Orientation can be overridden at compile time:
+// - DST7565_COM_REVERSE=1 to flip vertically
+// - DST7565_SEG_REVERSE=0/1 to flip horizontally
+#ifndef ST7565_COM_REVERSE
+#define ST7565_COM_REVERSE 0
+#endif
+#ifndef ST7565_SEG_REVERSE
+#define ST7565_SEG_REVERSE 1
+#endif
+
 static uint8_t cmds[] = {
     ST7565_CMD_BIAS_SELECT | 0,            // Select bias setting: 1/9
-    ST7565_CMD_COM_DIRECTION | (0 << 3),   // Set output direction of COM: normal
-    ST7565_CMD_SEG_DIRECTION | 1,          // Set scan direction of SEG: reverse
+    ST7565_CMD_COM_DIRECTION | ((ST7565_COM_REVERSE ? 1 : 0) << 3),   // COM direction
+    ST7565_CMD_SEG_DIRECTION | (ST7565_SEG_REVERSE ? 1 : 0),          // SEG direction
     ST7565_CMD_INVERSE_DISPLAY | 0,        // Inverse Display: false
     ST7565_CMD_ALL_PIXEL_ON | 0,           // All Pixel ON: false - normal display
     ST7565_CMD_REGULATION_RATIO | (4 << 0),// Regulation Ratio 5.0
