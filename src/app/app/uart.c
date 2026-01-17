@@ -51,15 +51,23 @@
 
 #include "../version.h"
 
+#if defined(__GNUC__)
+#define PACKED __attribute__((packed))
+#else
+#define PACKED
+#endif
+
 // ESP32 Arduino doesn't use DMA for UART by default
 // Define buffer for serial communication
 static uint8_t UART_DMA_Buffer[256];
+// For ESP32 we emulate the original DMA circular buffer:
+// - `uart_buffer_head` is the current write index (like DMA write pointer)
+// - `gUART_WriteIndex` is the current read/parse index
 static volatile uint16_t uart_buffer_head = 0;
-static volatile uint16_t uart_buffer_tail = 0;
 
 #define DMA_INDEX(x, y) (((x) + (y)) % sizeof(UART_DMA_Buffer))
 
-typedef struct {
+typedef struct PACKED {
     uint16_t ID;
     uint16_t Size;
 } Header_t;
@@ -71,28 +79,28 @@ typedef struct {
         uint32_t Timestamp;
     } CMD_0801_t; // simulate key press
 #endif
-typedef struct {
+typedef struct PACKED {
     uint8_t Padding[2];
     uint16_t ID;
 } Footer_t;
 
-typedef struct {
+typedef struct PACKED {
     Header_t Header;
     uint32_t Timestamp;
 } CMD_0514_t;
 
-typedef struct {
+typedef struct PACKED {
     Header_t Header;
-    struct {
+    struct PACKED {
         char Version[16];
-        bool bHasCustomAesKey;
-        bool bIsInLockScreen;
+        uint8_t bHasCustomAesKey;
+        uint8_t bIsInLockScreen;
         uint8_t Padding[2];
         uint32_t Challenge[4];
     } Data;
 } REPLY_0514_t;
 
-typedef struct {
+typedef struct PACKED {
     Header_t Header;
     uint16_t Offset;
     uint8_t Size;
@@ -100,7 +108,7 @@ typedef struct {
     uint32_t Timestamp;
     uint8_t ADD[2];
 } CMD_051B_t;
-typedef struct {
+typedef struct PACKED {
     Header_t Header;
     uint16_t Offset;
     uint8_t Size;
@@ -109,9 +117,9 @@ typedef struct {
     uint8_t ADD[2];
 
 } CMD_052B_t;
-typedef struct {
+typedef struct PACKED {
     Header_t Header;
-    struct {
+    struct PACKED {
         uint16_t Offset;
         uint8_t Size;
         uint8_t Padding;
@@ -119,40 +127,40 @@ typedef struct {
     } Data;
 } REPLY_051B_t;
 
-typedef struct {
+typedef struct PACKED {
     Header_t Header;
     uint16_t Offset;
     uint8_t Size;
-    bool bAllowPassword;
+    uint8_t bAllowPassword;
     uint32_t Timestamp;
-    uint8_t Data[0];
+    uint8_t Data[];
 } CMD_051D_t;
 
-typedef struct {
+typedef struct PACKED {
     Header_t Header;
-    struct {
+    struct PACKED {
         uint16_t Offset;
     } Data;
 } REPLY_051D_t;
 
-typedef struct {
+typedef struct PACKED {
     Header_t Header;
-    struct {
+    struct PACKED {
         uint16_t RSSI;
         uint8_t ExNoiseIndicator;
         uint8_t GlitchIndicator;
     } Data;
 } REPLY_0527_t;
 
-typedef struct {
+typedef struct PACKED {
     Header_t Header;
-    struct {
+    struct PACKED {
         uint16_t Voltage;
         uint16_t Current;
     } Data;
 } REPLY_0529_t;
 
-typedef struct {
+typedef struct PACKED {
     Header_t Header;
     uint32_t Response[4];
 } CMD_052D_t;
@@ -165,7 +173,7 @@ typedef struct {
     } Data;
 } REPLY_052D_t;
 #endif
-typedef struct {
+typedef struct PACKED {
     Header_t Header;
     uint32_t Timestamp;
 } CMD_052F_t;
@@ -187,11 +195,39 @@ static uint32_t Timestamp;
 static uint16_t gUART_WriteIndex;
 static bool bIsEncrypted = true;
 
+#ifndef UART_PROTOCOL_DEBUG
+#define UART_PROTOCOL_DEBUG 0
+#endif
+
+#if UART_PROTOCOL_DEBUG
+static void UART_DebugLogFrame(const char *tag, uint16_t size, uint16_t cmdLength)
+{
+    // USB CDC Serial is preferred; keep UART0 dedicated to K5 protocol.
+    Serial.printf("[UART] %s size=%u cmdLen=%u head=%u tail=%u\r\n",
+                  tag,
+                  (unsigned)size,
+                  (unsigned)cmdLength,
+                  (unsigned)gUART_WriteIndex,
+                  (unsigned)uart_buffer_head);
+}
+static void UART_DebugLogCmd(uint16_t id, uint16_t size, uint16_t dataSize, bool crcOk)
+{
+    Serial.printf("[UART] cmd id=0x%04X size=%u data=%u crc=%s enc=%u\r\n",
+                  (unsigned)id,
+                  (unsigned)size,
+                  (unsigned)dataSize,
+                  crcOk ? "OK" : "BAD",
+                  (unsigned)bIsEncrypted);
+}
+#endif
+
 static void SendReply(void *pReply, uint16_t Size) {
     Header_t Header;
     Footer_t Footer;
 
-    if (bIsEncrypted) {
+    // K5Web always XOR-deobfuscates the payload on receive.
+    // To stay compatible, always XOR-obfuscate replies here.
+    {
         uint8_t *pBytes = (uint8_t *) pReply;
         unsigned int i;
         for (i = 0; i < Size; i++)
@@ -203,13 +239,9 @@ static void SendReply(void *pReply, uint16_t Size) {
     UART_Send(&Header, sizeof(Header));
     UART_Send(pReply, Size);
 
-    if (bIsEncrypted) {
-        Footer.Padding[0] = Obfuscation[(Size + 0) % 16] ^ 0xFF;
-        Footer.Padding[1] = Obfuscation[(Size + 1) % 16] ^ 0xFF;
-    } else {
-        Footer.Padding[0] = 0xFF;
-        Footer.Padding[1] = 0xFF;
-    }
+    // Padding bytes are ignored by K5Web, but keep them consistent with the XOR scheme.
+    Footer.Padding[0] = Obfuscation[(Size + 0) % 16] ^ 0xFF;
+    Footer.Padding[1] = Obfuscation[(Size + 1) % 16] ^ 0xFF;
     Footer.ID = 0xBADC;
 
     UART_Send(&Footer, sizeof(Footer));
@@ -221,8 +253,8 @@ static void SendVersion(void) {
     Reply.Header.ID = 0x0515;
     Reply.Header.Size = sizeof(Reply.Data);
     strcpy(Reply.Data.Version, Version);
-    Reply.Data.bHasCustomAesKey = bHasCustomAesKey;
-    Reply.Data.bIsInLockScreen = bIsInLockScreen;
+    Reply.Data.bHasCustomAesKey = bHasCustomAesKey ? 1U : 0U;
+    Reply.Data.bIsInLockScreen = bIsInLockScreen ? 1U : 0U;
     Reply.Data.Challenge[0] = gChallenge[0];
     Reply.Data.Challenge[1] = gChallenge[1];
     Reply.Data.Challenge[2] = gChallenge[2];
@@ -504,12 +536,25 @@ bool UART_IsCommandAvailable(void) {
     uint16_t CRC;
     uint16_t CommandLength;
 
-    // Read available data from UART into buffer
-    while (UART_Available() > 0 && uart_buffer_tail < sizeof(UART_DMA_Buffer)) {
-        UART_DMA_Buffer[uart_buffer_tail++] = (uint8_t)UART_Read();
+    // Read available data from UART into circular buffer.
+    // IMPORTANT: the previous linear fill implementation would stop reading after 256 bytes.
+    while (UART_Available() > 0) {
+        const int c = UART_Read();
+        if (c < 0) {
+            break;
+        }
+
+        const uint16_t next = DMA_INDEX(uart_buffer_head, 1);
+        if (next == gUART_WriteIndex) {
+            // Buffer full: drop oldest byte to keep receiving.
+            gUART_WriteIndex = DMA_INDEX(gUART_WriteIndex, 1);
+        }
+
+        UART_DMA_Buffer[uart_buffer_head] = (uint8_t)c;
+        uart_buffer_head = next;
     }
 
-    uint16_t DmaLength = uart_buffer_tail;
+    const uint16_t DmaLength = uart_buffer_head;
 
 
     while (1) {
@@ -528,7 +573,7 @@ bool UART_IsCommandAvailable(void) {
             CommandLength = (DmaLength + sizeof(UART_DMA_Buffer)) - gUART_WriteIndex;
 
         if (CommandLength < 8)
-            return 0;
+            return false;
 
         if (UART_DMA_Buffer[DMA_INDEX(gUART_WriteIndex, 1)] == 0xCD)
             break;
@@ -539,19 +584,30 @@ bool UART_IsCommandAvailable(void) {
     Index = DMA_INDEX(gUART_WriteIndex, 2);
     Size = (UART_DMA_Buffer[DMA_INDEX(Index, 1)] << 8) | UART_DMA_Buffer[Index];
 
-    if ((Size + 8u) > sizeof(UART_DMA_Buffer)) {
-        gUART_WriteIndex = DmaLength;
+    // The length field is payload length (excluding CRC and footer).
+    // Drop obviously invalid sizes, but keep resyncing instead of discarding everything.
+    if (Size > (uint16_t)(sizeof(UART_Command.Buffer) - 2u)) {
+#if UART_PROTOCOL_DEBUG
+        UART_DebugLogFrame("bad-len", Size, CommandLength);
+#endif
+        gUART_WriteIndex = DMA_INDEX(gUART_WriteIndex, 1);
         return false;
     }
 
-    if (CommandLength < (Size + 8))
+    if (CommandLength < (Size + 8)) {
+        // Partial frame: wait for more bytes.
         return false;
+    }
 
     Index = DMA_INDEX(Index, 2);
     TailIndex = DMA_INDEX(Index, Size + 2);
 
     if (UART_DMA_Buffer[TailIndex] != 0xDC || UART_DMA_Buffer[DMA_INDEX(TailIndex, 1)] != 0xBA) {
-        gUART_WriteIndex = DmaLength;
+        // Footer mismatch: advance one byte and resync.
+    #if UART_PROTOCOL_DEBUG
+        UART_DebugLogFrame("bad-footer", Size, CommandLength);
+    #endif
+        gUART_WriteIndex = DMA_INDEX(gUART_WriteIndex, 1);
         return false;
     }
 
@@ -563,13 +619,24 @@ bool UART_IsCommandAvailable(void) {
         memcpy(UART_Command.Buffer, UART_DMA_Buffer + Index, TailIndex - Index);
 
     TailIndex = DMA_INDEX(TailIndex, 2);
-    if (TailIndex < gUART_WriteIndex) {
-        memset(UART_DMA_Buffer + gUART_WriteIndex, 0, sizeof(UART_DMA_Buffer) - gUART_WriteIndex);
-        memset(UART_DMA_Buffer, 0, TailIndex);
-    } else
-        memset(UART_DMA_Buffer + gUART_WriteIndex, 0, TailIndex - gUART_WriteIndex);
-
+    // Advance parse pointer (no need to clear bytes in a ring buffer).
     gUART_WriteIndex = TailIndex;
+
+    // The on-wire protocol used by K5Web always XOR-obfuscates (payload + CRC).
+    // Deobfuscate first, then decide encryption mode by decoded command ID.
+    {
+        unsigned int i;
+        for (i = 0; i < (Size + 2u); i++)
+            UART_Command.Buffer[i] ^= Obfuscation[i % 16];
+    }
+
+    // Basic sanity check: payload must contain at least an inner Header_t.
+    if (Size < (uint16_t)sizeof(Header_t)) {
+#if UART_PROTOCOL_DEBUG
+        UART_DebugLogFrame("too-small", Size, CommandLength);
+#endif
+        return false;
+    }
 
     if (UART_Command.Header.ID == 0x0514)
         bIsEncrypted = false;
@@ -577,21 +644,19 @@ bool UART_IsCommandAvailable(void) {
     if (UART_Command.Header.ID == 0x6902)
         bIsEncrypted = true;
 
-    if (bIsEncrypted) {
-        unsigned int i;
-        for (i = 0; i < (Size + 2u); i++)
-            UART_Command.Buffer[i] ^= Obfuscation[i % 16];
-    }
-
     CRC = UART_Command.Buffer[Size] | (UART_Command.Buffer[Size + 1] << 8);
 //    char b[2]="3K";
 //     uint8_t tmp[Size];
 //    for (int i = 0; i < Size; i++) {
 //        tmp[i]=UART_Command.Buffer[i];
 //    }
-    bool judge = (CRC_Calculate1(UART_Command.Buffer, Size) != CRC) ? false : true;
+    const bool crcOk = (CRC_Calculate1(UART_Command.Buffer, Size) == CRC);
 
-    return judge;
+#if UART_PROTOCOL_DEBUG
+    UART_DebugLogCmd(UART_Command.Header.ID, Size, UART_Command.Header.Size, crcOk);
+#endif
+
+    return crcOk;
 }
 
 #if ENABLE_CHINESE_FULL == 4
@@ -724,7 +789,7 @@ void UART_HandleCommand(void) {
             break;
 
         case 0x05DD:
-
+            // Avoid accidental reboot during bring-up unless explicitly enabled.
             esp_restart();
 
             break;

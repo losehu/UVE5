@@ -1,3 +1,3 @@
 #include "font.h"
-const char Version[]      = "LOSEHU132";
+const char Version[]      = "LOSEHU132H";
 

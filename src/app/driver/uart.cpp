@@ -19,7 +19,7 @@ static bool UART_IsLogEnabled = true;
 void UART_Init(uint32_t baud) {
     // Initialize UART0 using Arduino's uartBegin
     // uartBegin(uart_nr, baudrate, config, rxPin, txPin, rx_buffer_size, tx_buffer_size, inverted, rxfifo_full_thrhd)
-    uart = uartBegin(UART_NUM, baud, SERIAL_8N1, UART_RX_PIN, UART_TX_PIN, UART_BUF_SIZE, 0, false, 112);
+    uart = uartBegin(UART_NUM, baud, SERIAL_8N1, UART_RX_PIN, UART_TX_PIN, UART_BUF_SIZE, UART_BUF_SIZE, false, 112);
 }
 
 void UART_Send(const void *pBuffer, uint32_t size) {

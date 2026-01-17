@@ -48,6 +48,10 @@
 #include "sram-overlay.h"
 #endif
 
+#ifndef UART_BAUD
+#define UART_BAUD 38400
+#endif
+
 #if defined(ENABLE_OVERLAY)
 void BOARD_FLASH_Init(void)
     {
@@ -97,7 +101,7 @@ ADC_Configure();
 
 
     KEYBOARD_Init();
-    UART_Init(115200);
+    UART_Init(UART_BAUD);
         delay(100);
 
     BK4819_Init();

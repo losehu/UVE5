@@ -67,7 +67,7 @@
 
 #ifdef ENABLE_UART
 
-#include "driver/uart.h"
+#include "driver/uart1.h"
 
 #endif
 
@@ -93,11 +93,9 @@
 #include "app/arduboy_avr.h"
 #endif
 #ifndef ENABLE_SCREEN_FPS_TEST
-#define ENABLE_SCREEN_FPS_TEST 1
+#define ENABLE_SCREEN_FPS_TEST 0
 #endif
-#ifndef ENABLE_SCREEN_FPS_TEST
-#define ENABLE_SCREEN_FPS_TEST 1
-#endif
+
 
 #ifndef SCREEN_TEST_GRAY_LEVELS
 #define SCREEN_TEST_GRAY_LEVELS 8
@@ -513,7 +511,7 @@ static void ScreenCkxTest() {
 
  
 void setup() {
-  switch_to_factory_and_restart();
+        switch_to_factory_and_restart();
   Serial.begin(115200);
   Serial.println("Initializing devices...");
   BOARD_Init();
@@ -583,20 +581,9 @@ void setup() {
 
 
 void loop() {
-    Serial.println("Starting main application...");
      UI_DisplayWelcome();
 
-#ifdef ENABLE_BOOTLOADER
-    if(KEYBOARD_Poll() == KEY_MENU)
-{
-            for (int i = 0; i < 10*1024; i += 4) {
-                uint32_t c;
-                EEPROM_ReadBuffer(0x41000 + i, (uint8_t *) &c, 4);
-                write_to_memory(0x20001000 + i, c);
-            }
-            JUMP_TO_FLASH(0x2000110a, 0x20003ff0);
-}
-#endif
+
 
     boot_counter_10ms = 250;
 

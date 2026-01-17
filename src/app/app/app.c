@@ -1148,12 +1148,15 @@ void APP_TimeSlice10ms(void) {
 
     if (UART_IsCommandAvailable()) {
 
-#ifndef ENABLE_OPENCV
-        portDISABLE_INTERRUPTS();
+    // On ESP32, globally disabling interrupts while handling UART commands is unsafe.
+    // Replies use the Arduino/IDF UART driver which may block/yield and relies on interrupts,
+    // so disabling interrupts here can trigger an "Interrupt wdt timeout" reset.
+#if !defined(ENABLE_OPENCV) && !defined(ARDUINO_ARCH_ESP32)
+    portDISABLE_INTERRUPTS();
 #endif
-        UART_HandleCommand();
-#ifndef ENABLE_OPENCV
-        portENABLE_INTERRUPTS();
+    UART_HandleCommand();
+#if !defined(ENABLE_OPENCV) && !defined(ARDUINO_ARCH_ESP32)
+    portENABLE_INTERRUPTS();
 #endif
     }
 #endif
