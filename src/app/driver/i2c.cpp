@@ -17,131 +17,139 @@
 #include "i2c1.h"
 #include <Arduino.h>
 
+static constexpr uint32_t I2C_DELAY_US = 5;
+
+static inline void I2C_SDA_Low(void)
+{
+    pinMode(I2C_PIN_SDA, OUTPUT);
+    digitalWrite(I2C_PIN_SDA, LOW);
+}
+
+static inline void I2C_SDA_Release(void)
+{
+    // 释放 SDA（开漏高）。使用内部上拉作为兜底（若外部上拉不存在/偏弱）。
+    pinMode(I2C_PIN_SDA, INPUT_PULLUP);
+}
+
+static inline void I2C_SCL_Low(void)
+{
+    pinMode(I2C_PIN_SCL, OUTPUT);
+    digitalWrite(I2C_PIN_SCL, LOW);
+}
+
+static inline void I2C_SCL_Release(void)
+{
+    // 释放 SCL（开漏高）。EEPROM 通常不拉伸时钟，但开漏实现更稳。
+    pinMode(I2C_PIN_SCL, INPUT_PULLUP);
+}
+
+static inline void I2C_RestoreSharedPinsForKeyboard(void)
+{
+    // KEY4/KEY5 与 I2C 复用时，键盘矩阵需要列引脚为输出。
+    // I2C 传输结束后把它们恢复为输出高电平，避免按键被“留在输入上拉模式”。
+    pinMode(I2C_PIN_SDA, OUTPUT);
+    digitalWrite(I2C_PIN_SDA, HIGH);
+    pinMode(I2C_PIN_SCL, OUTPUT);
+    digitalWrite(I2C_PIN_SCL, HIGH);
+}
+
 // I2C 初始化
 void I2C_Init(void) {
-    // 配置引脚为输出开漏模式
-    pinMode(I2C_PIN_SDA, OUTPUT);
-    pinMode(I2C_PIN_SCL, OUTPUT);
+    // 配置引脚
     pinMode(I2C_PIN_EN, OUTPUT);
-    // 初始化为高电平（空闲状态）
-    digitalWrite(I2C_PIN_SDA, HIGH);
-    digitalWrite(I2C_PIN_SCL, HIGH);
+    // 某些外设使用该引脚作为 I2C 使能（常见为低有效）
+    digitalWrite(I2C_PIN_EN, LOW);
+
+    // 空闲状态：SCL/SDA 都为高（开漏释放）
+    I2C_SDA_Release();
+    I2C_SCL_Release();
 }
 
 // I2C 开始信号
 // SDA 从高变低，而 SCL 保持高
 void I2C_Start(void) {
-    digitalWrite(I2C_PIN_SDA, HIGH);
-    delayMicroseconds(1);
-    digitalWrite(I2C_PIN_SCL, HIGH);
-    delayMicroseconds(1);
-    digitalWrite(I2C_PIN_SDA, LOW);
-    delayMicroseconds(1);
-    digitalWrite(I2C_PIN_SCL, LOW);
-    delayMicroseconds(1);
+    I2C_SDA_Release();
+    I2C_SCL_Release();
+    delayMicroseconds(I2C_DELAY_US);
+    I2C_SDA_Low();
+    delayMicroseconds(I2C_DELAY_US);
+    I2C_SCL_Low();
+    delayMicroseconds(I2C_DELAY_US);
 }
 
 // I2C 停止信号
 // SDA 从低变高，而 SCL 为高
 void I2C_Stop(void) {
-    digitalWrite(I2C_PIN_SDA, LOW);
-    delayMicroseconds(1);
-    digitalWrite(I2C_PIN_SCL, LOW);
-    delayMicroseconds(1);
-    digitalWrite(I2C_PIN_SCL, HIGH);
-    delayMicroseconds(1);
-    digitalWrite(I2C_PIN_SDA, HIGH);
-    delayMicroseconds(1);
+    I2C_SDA_Low();
+    delayMicroseconds(I2C_DELAY_US);
+    I2C_SCL_Release();
+    delayMicroseconds(I2C_DELAY_US);
+    I2C_SDA_Release();
+    delayMicroseconds(I2C_DELAY_US);
+
+    // 兼容键盘扫描（共享引脚）
+    I2C_RestoreSharedPinsForKeyboard();
 }
 
 // I2C 读取一个字节
 // bFinal: 最后一个字节时为 true（发送 NAK），否则为 false（发送 ACK）
 uint8_t I2C_Read(bool bFinal) {
-    uint8_t i, Data;
-    
-    // 配置 SDA 为输入模式（开漏）
-    pinMode(I2C_PIN_SDA, INPUT);
-    
-    Data = 0;
-    for (i = 0; i < 8; i++) {
-        digitalWrite(I2C_PIN_SCL, LOW);
-        delayMicroseconds(1);
-        digitalWrite(I2C_PIN_SCL, HIGH);
-        delayMicroseconds(1);
-        Data <<= 1;
-        delayMicroseconds(1);
-        if (digitalRead(I2C_PIN_SDA)) {
-            Data |= 1U;
-        }
-        digitalWrite(I2C_PIN_SCL, LOW);
-        delayMicroseconds(1);
+    uint8_t Data = 0;
+
+    // 释放 SDA 由从机驱动
+    I2C_SDA_Release();
+
+    for (uint8_t i = 0; i < 8; i++) {
+        I2C_SCL_Release();
+        delayMicroseconds(I2C_DELAY_US);
+        Data = (uint8_t)((Data << 1) | (digitalRead(I2C_PIN_SDA) ? 1U : 0U));
+        I2C_SCL_Low();
+        delayMicroseconds(I2C_DELAY_US);
     }
-    
-    // 配置 SDA 回到输出模式
-    pinMode(I2C_PIN_SDA, OUTPUT);
-    digitalWrite(I2C_PIN_SCL, LOW);
-    delayMicroseconds(1);
-    
-    // 发送 ACK 或 NAK
+
+    // ACK/NAK
     if (bFinal) {
-        digitalWrite(I2C_PIN_SDA, HIGH);  // NAK
+        I2C_SDA_Release(); // NAK
     } else {
-        digitalWrite(I2C_PIN_SDA, LOW);   // ACK
+        I2C_SDA_Low();     // ACK
     }
-    delayMicroseconds(1);
-    digitalWrite(I2C_PIN_SCL, HIGH);
-    delayMicroseconds(1);
-    digitalWrite(I2C_PIN_SCL, LOW);
-    delayMicroseconds(1);
-    
+    delayMicroseconds(I2C_DELAY_US);
+    I2C_SCL_Release();
+    delayMicroseconds(I2C_DELAY_US);
+    I2C_SCL_Low();
+    delayMicroseconds(I2C_DELAY_US);
+    I2C_SDA_Release();
+
     return Data;
 }
 
 // I2C 写入一个字节
 // 返回值: 0 表示收到 ACK，-1 表示未收到 ACK
 int I2C_Write(uint8_t Data) {
-    uint8_t i;
-    int ret = -1;
-    
-    digitalWrite(I2C_PIN_SCL, LOW);
-    delayMicroseconds(1);
-    
-    // 发送 8 位数据
-    for (i = 0; i < 8; i++) {
-        if ((Data & 0x80) == 0) {
-            digitalWrite(I2C_PIN_SDA, LOW);
+    // 发送 8 位数据（MSB first）
+    for (uint8_t i = 0; i < 8; i++) {
+        if (Data & 0x80) {
+            I2C_SDA_Release();
         } else {
-            digitalWrite(I2C_PIN_SDA, HIGH);
+            I2C_SDA_Low();
         }
         Data <<= 1;
-        delayMicroseconds(1);
-        digitalWrite(I2C_PIN_SCL, HIGH);
-        delayMicroseconds(2);
-        digitalWrite(I2C_PIN_SCL, LOW);
-        delayMicroseconds(1);
+        delayMicroseconds(I2C_DELAY_US);
+        I2C_SCL_Release();
+        delayMicroseconds(I2C_DELAY_US);
+        I2C_SCL_Low();
+        delayMicroseconds(I2C_DELAY_US);
     }
-    
-    // 读取 ACK 信号
-    pinMode(I2C_PIN_SDA, INPUT);
-    digitalWrite(I2C_PIN_SCL, LOW);
-    delayMicroseconds(1);
-    
-    for (i = 0; i < 255; i++) {
-        if (!digitalRead(I2C_PIN_SDA)) {
-            ret = 0;
-            break;
-        }
-    }
-    
-    digitalWrite(I2C_PIN_SCL, HIGH);
-    delayMicroseconds(1);
-    digitalWrite(I2C_PIN_SCL, LOW);
-    delayMicroseconds(1);
-    
-    // 恢复 SDA 为输出模式
-    pinMode(I2C_PIN_SDA, OUTPUT);
-    digitalWrite(I2C_PIN_SDA, HIGH);
-    
+
+    // ACK：释放 SDA，由从机拉低
+    I2C_SDA_Release();
+    delayMicroseconds(I2C_DELAY_US);
+    I2C_SCL_Release();
+    delayMicroseconds(I2C_DELAY_US);
+    const int ret = digitalRead(I2C_PIN_SDA) ? -1 : 0;
+    I2C_SCL_Low();
+    delayMicroseconds(I2C_DELAY_US);
+
     return ret;
 }
 

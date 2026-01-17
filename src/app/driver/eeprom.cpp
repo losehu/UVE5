@@ -19,6 +19,26 @@
 #include <Arduino.h>
 #include <string.h>
 
+static inline uint8_t EEPROM_ControlByteWrite(uint32_t Address)
+{
+    return (uint8_t)(EEPROM_DEVICE_BASE_ADDR | (((Address >> 16) & 0x07U) << 1));
+}
+
+static bool EEPROM_WaitReady(uint8_t controlByteWrite, uint32_t timeoutMs)
+{
+    const uint32_t start = millis();
+    while ((uint32_t)(millis() - start) < timeoutMs) {
+        I2C_Start();
+        const int ack = I2C_Write(controlByteWrite);
+        I2C_Stop();
+        if (ack == 0) {
+            return true;
+        }
+        delayMicroseconds(200);
+    }
+    return false;
+}
+
 // EEPROM 初始化
 void EEPROM_Init(void) {
     I2C_Init();
@@ -31,15 +51,25 @@ void EEPROM_ReadBuffer(uint32_t Address, void *pBuffer, uint8_t Size) {
     noInterrupts();
     I2C_Start();
 
-    uint8_t IIC_ADD =    0xA0 | Address >> 15 &14;
+    // 24xx 系列控制字节: 1010 A2 A1 A0 R/W
+    // 对于 512KB 线性空间（2x256KB），使用 Address[18:16] 映射到 A2..A0
+    const uint8_t IIC_ADD = EEPROM_ControlByteWrite(Address);
 
-    I2C_Write(IIC_ADD);
-    I2C_Write((Address >> 8) & 0xFF);
-    I2C_Write((Address >> 0) & 0xFF);
+    if (I2C_Write(IIC_ADD) < 0 ||
+        I2C_Write((Address >> 8) & 0xFF) < 0 ||
+        I2C_Write((Address >> 0) & 0xFF) < 0) {
+        I2C_Stop();
+        interrupts();
+        return;
+    }
 
     I2C_Start();
 
-    I2C_Write(IIC_ADD + 1);
+    if (I2C_Write(IIC_ADD + 1) < 0) {
+        I2C_Stop();
+        interrupts();
+        return;
+    }
 
     I2C_ReadBuffer(pBuffer, Size);
 
@@ -48,23 +78,58 @@ void EEPROM_ReadBuffer(uint32_t Address, void *pBuffer, uint8_t Size) {
 
 }
 
+bool EEPROM_Probe(uint32_t Address)
+{
+    noInterrupts();
+    I2C_Start();
+
+    const uint8_t iic_add = EEPROM_ControlByteWrite(Address);
+    if (I2C_Write(iic_add) < 0) {
+        I2C_Stop();
+        interrupts();
+        return false;
+    }
+
+    // 发送 16-bit word address（块内寻址）
+    if (I2C_Write((Address >> 8) & 0xFF) < 0 || I2C_Write(Address & 0xFF) < 0) {
+        I2C_Stop();
+        interrupts();
+        return false;
+    }
+
+    I2C_Stop();
+    interrupts();
+    return true;
+}
+
 void EEPROM_WriteBuffer(uint32_t Address, const void *pBuffer, uint8_t WRITE_SIZE) {
 
 
     uint8_t buffer[128];
     EEPROM_ReadBuffer(Address, buffer, WRITE_SIZE);
     if (memcmp(pBuffer, buffer, WRITE_SIZE) != 0) {
-        uint8_t IIC_ADD =    0xA0 | Address >> 15 &14;
+        const uint8_t IIC_ADD = EEPROM_ControlByteWrite(Address);
+
+        noInterrupts();
 
         I2C_Start();
 
-        I2C_Write(IIC_ADD);
-
-        I2C_Write((Address >> 8) & 0xFF);
-        I2C_Write((Address) & 0xFF);
-        I2C_WriteBuffer(pBuffer, WRITE_SIZE);
+        if (I2C_Write(IIC_ADD) < 0 ||
+            I2C_Write((Address >> 8) & 0xFF) < 0 ||
+            I2C_Write((Address) & 0xFF) < 0 ||
+            I2C_WriteBuffer(pBuffer, WRITE_SIZE) < 0) {
+            I2C_Stop();
+            interrupts();
+            delay(1);
+            return;
+        }
         I2C_Stop();
+
+        // 写周期 ACK 轮询（比固定 delay 更可靠）
+        (void)EEPROM_WaitReady(IIC_ADD, 20);
+
+        interrupts();
     }
-    delay(10);
+    // 兜底延时，避免某些器件/布线在连续访问时不稳
 
 }
