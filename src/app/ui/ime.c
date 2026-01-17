@@ -85,13 +85,6 @@ static bool PINYIN_GetFlatEntry(uint8_t start, uint8_t end, uint16_t flat_index,
 }
 #endif
 
-static void UI_InvertBlock(uint8_t row, uint8_t x, uint8_t width)
-{
-    for (uint8_t i = 0; i < width; ++i) {
-        gFrameBuffer[row][x + i] ^= 0xFF;
-    }
-}
-
 void UI_DisplayIme(void) {
     const unsigned int menu_item_x1 = 12;
     const unsigned int menu_item_x2 = LCD_WIDTH - 1;

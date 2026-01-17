@@ -142,6 +142,7 @@ enum {
     MENU_MLONG,
 #endif
     MENU_BATTYP
+	, MENU_RTC
 };
 
 extern const t_menu_item MenuList[];

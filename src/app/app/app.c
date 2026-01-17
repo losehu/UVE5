@@ -1130,6 +1130,17 @@ static void CheckKeys(void) {
 void APP_TimeSlice10ms(void) {
     gNextTimeslice = false;
     gFlashLightBlinkCounter++;
+
+    // RTC menu auto-refresh: keep updating the displayed time even when no keys are pressed.
+    // Refresh at 10Hz (every 100ms) when currently on the RTC menu item.
+    static uint32_t s_last_rtc_menu_refresh_ms = 0;
+    if (gScreenToDisplay == DISPLAY_MENU && UI_MENU_GetCurrentMenuId() == MENU_RTC) {
+        const uint32_t now_ms = millis();
+        if ((uint32_t)(now_ms - s_last_rtc_menu_refresh_ms) >= 100U) {
+            s_last_rtc_menu_refresh_ms = now_ms;
+            gUpdateDisplay = true;
+        }
+    }
 #ifdef ENABLE_MESSENGER
     keyTickCounter++;
 #endif

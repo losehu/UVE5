@@ -41,6 +41,8 @@
 #include "../settings.h"
 #include "ime.h"
 
+#include "../driver/pcf8563.h"
+
 #if defined(ENABLE_OVERLAY)
 #include "sram-overlay.h"
 #endif
@@ -53,6 +55,42 @@
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
 #endif
+
+static uint8_t gRtcMenuField = 0; // 0:Y,1:M,2:D,3:h,4:m,5:s
+static bool gRtcMenuEditing = false;
+static pcf8563_time_t gRtcMenuTime;
+
+uint8_t MENU_RTC_GetField(void)
+{
+    return gRtcMenuField;
+}
+
+bool MENU_RTC_GetDisplayTime(pcf8563_time_t *t)
+{
+    if (!t) {
+        return false;
+    }
+
+    if (gRtcMenuEditing && UI_MENU_GetCurrentMenuId() == MENU_RTC) {
+        *t = gRtcMenuTime;
+        return true;
+    }
+
+    return PCF8563_ReadTime(t);
+}
+
+static inline bool RTC_IsLeapYear(uint16_t y)
+{
+    return ((y % 4U) == 0U && (y % 100U) != 0U) || ((y % 400U) == 0U);
+}
+
+static inline uint8_t RTC_DaysInMonth(uint16_t y, uint8_t m)
+{
+    static const uint8_t days[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    if (m < 1 || m > 12) return 31;
+    if (m == 2 && RTC_IsLeapYear(y)) return 29;
+    return days[m - 1];
+}
 
 //uint8_t gUnlockAllTxConfCnt;
 
@@ -1562,6 +1600,16 @@ static void MENU_Key_0_to_9(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
 static void MENU_Key_EXIT(bool bKeyPressed, bool bKeyHeld) {
     if (bKeyHeld || !bKeyPressed)
         return;
+
+    if (UI_MENU_GetCurrentMenuId() == MENU_RTC && gIsInSubMenu) {
+        // Cancel RTC edit (discard changes) and stay in menu.
+        gRtcMenuField = 0;
+        gRtcMenuEditing = false;
+        gIsInSubMenu = false;
+        gFlagRefreshSetting = true;
+        gRequestDisplayScreen = DISPLAY_MENU;
+        return;
+    }
     if (UI_MENU_GetCurrentMenuId() == MENU_MEM_NAME && gIsInSubMenu == true && edit_index >= 0&&gAskForConfirmation == 0) {
 #ifdef ENABLE_PINYIN
         if (INPUT_MODE == 0) {
@@ -1758,6 +1806,28 @@ static void MENU_Key_MENU(const bool bKeyPressed, const bool bKeyHeld) {
         gAskForConfirmation = 0;
         gIsInSubMenu = true;
 
+        if (UI_MENU_GetCurrentMenuId() == MENU_RTC) {
+            // Enter RTC edit mode: read once into the editable copy.
+            pcf8563_time_t now;
+            if (PCF8563_ReadTime(&now)) {
+                gRtcMenuTime = now;
+            } else {
+                // Fallback defaults
+                gRtcMenuTime.year = 2026;
+                gRtcMenuTime.month = 1;
+                gRtcMenuTime.day = 1;
+                gRtcMenuTime.weekday = 0;
+                gRtcMenuTime.hour = 0;
+                gRtcMenuTime.minute = 0;
+                gRtcMenuTime.second = 0;
+                gRtcMenuTime.voltage_low = false;
+            }
+            gRtcMenuField = 0;
+            gRtcMenuEditing = true;
+            gRequestDisplayScreen = DISPLAY_MENU;
+            return;
+        }
+
 //		if (UI_MENU_GetCurrentMenuId() != MENU_D_LIST)
         {
             gInputBoxIndex = 0;
@@ -1772,6 +1842,25 @@ static void MENU_Key_MENU(const bool bKeyPressed, const bool bKeyHeld) {
         }
 #endif
 #endif
+        return;
+    }
+
+    if (gIsInSubMenu && UI_MENU_GetCurrentMenuId() == MENU_RTC) {
+        // MENU cycles field; after seconds, commit and exit.
+        if (gRtcMenuField < 5) {
+            gRtcMenuField++;
+            gRequestDisplayScreen = DISPLAY_MENU;
+            return;
+        }
+
+        // Commit edited time once.
+        (void)PCF8563_SetTime(&gRtcMenuTime);
+
+        gRtcMenuField = 0;
+        gRtcMenuEditing = false;
+        gIsInSubMenu = false;
+        gFlagRefreshSetting = true;
+        gRequestDisplayScreen = DISPLAY_MENU;
         return;
     }
 #ifdef ENABLE_MDC1200
@@ -2042,6 +2131,71 @@ static void MENU_Key_UP_DOWN(bool bKeyPressed, bool bKeyHeld, int8_t Direction) 
 #endif
 #endif
 
+    }
+
+    if (gIsInSubMenu && UI_MENU_GetCurrentMenuId() == MENU_RTC) {
+        if (!bKeyHeld && !bKeyPressed) {
+            return;
+        }
+        if (!bKeyPressed) {
+            return;
+        }
+
+        const int8_t d = (Direction >= 0) ? 1 : -1;
+        switch (gRtcMenuField) {
+            case 0: {
+                int32_t y = (int32_t)gRtcMenuTime.year + d;
+                if (y < 2000) y = 2099;
+                if (y > 2099) y = 2000;
+                gRtcMenuTime.year = (uint16_t)y;
+                const uint8_t dim = RTC_DaysInMonth(gRtcMenuTime.year, gRtcMenuTime.month);
+                if (gRtcMenuTime.day > dim) gRtcMenuTime.day = dim;
+                break;
+            }
+            case 1: {
+                int32_t m = (int32_t)gRtcMenuTime.month + d;
+                if (m < 1) m = 12;
+                if (m > 12) m = 1;
+                gRtcMenuTime.month = (uint8_t)m;
+                const uint8_t dim = RTC_DaysInMonth(gRtcMenuTime.year, gRtcMenuTime.month);
+                if (gRtcMenuTime.day > dim) gRtcMenuTime.day = dim;
+                break;
+            }
+            case 2: {
+                const uint8_t dim = RTC_DaysInMonth(gRtcMenuTime.year, gRtcMenuTime.month);
+                int32_t day = (int32_t)gRtcMenuTime.day + d;
+                if (day < 1) day = dim;
+                if (day > dim) day = 1;
+                gRtcMenuTime.day = (uint8_t)day;
+                break;
+            }
+            case 3: {
+                int32_t h = (int32_t)gRtcMenuTime.hour + d;
+                if (h < 0) h = 23;
+                if (h > 23) h = 0;
+                gRtcMenuTime.hour = (uint8_t)h;
+                break;
+            }
+            case 4: {
+                int32_t mi = (int32_t)gRtcMenuTime.minute + d;
+                if (mi < 0) mi = 59;
+                if (mi > 59) mi = 0;
+                gRtcMenuTime.minute = (uint8_t)mi;
+                break;
+            }
+            case 5: {
+                int32_t s = (int32_t)gRtcMenuTime.second + d;
+                if (s < 0) s = 59;
+                if (s > 59) s = 0;
+                gRtcMenuTime.second = (uint8_t)s;
+                break;
+            }
+            default:
+                break;
+        }
+
+        gRequestDisplayScreen = DISPLAY_MENU;
+        return;
     }
     if (!bKeyHeld) {
         if (!bKeyPressed)

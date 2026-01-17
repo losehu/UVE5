@@ -35,6 +35,7 @@
 #include "menu.h"
 #include "ui.h"
 #include "../chinese.h"
+#include "../driver/pcf8563.h"
 
 #ifdef ENABLE_PINYIN
 static uint8_t PINYIN_ReadCount(uint8_t index);
@@ -148,6 +149,8 @@ const t_menu_item MenuList[] =
 #endif
                 {/*"BatCal",*/ VOICE_ID_INVALID, MENU_BATCAL, STR_BAT_CAL}, // battery voltage calibration
                 {/*"BatTyp",*/ VOICE_ID_INVALID, MENU_BATTYP, STR_BAT_VOL}, // battery type 1600/2200mAh
+                {/*"RTC",*/    VOICE_ID_INVALID, MENU_RTC,
+                               STR_RTC_TIME},
                 {/*"Reset",*/  VOICE_ID_INITIALISATION, MENU_RESET,
                                STR_RESET}, // might be better to move this to the hidden menu items ?
 
@@ -572,6 +575,29 @@ uint8_t UI_MENU_GetMenuIdx(uint8_t id) {
 }
 
 int32_t gSubMenuSelection;
+
+static void UI_DrawUnderlineSmall(uint8_t line, uint8_t x, uint8_t width)
+{
+    if (line >= FRAME_LINES) {
+        return;
+    }
+    if (x >= LCD_WIDTH || width == 0) {
+        return;
+    }
+
+    const uint8_t y = (uint8_t)(line * 8u + 9u); // move underline down by 2px
+    if (y >= LCD_HEIGHT) {
+        return;
+    }
+
+    uint16_t end = (uint16_t)x + (uint16_t)width;
+    if (end > LCD_WIDTH) {
+        end = LCD_WIDTH;
+    }
+    for (uint16_t xi = x; xi < end; ++xi) {
+        PutPixel((uint8_t)xi, y, true);
+    }
+}
 
 void UI_DisplayMenu(void) {
     const unsigned int menu_list_width = 6; // max no. of characters on the menu list (left side)
@@ -1318,6 +1344,97 @@ void UI_DisplayMenu(void) {
 
 
             break;
+
+        case MENU_RTC: {
+            pcf8563_time_t t;
+            if (MENU_RTC_GetDisplayTime(&t)) {
+                char dateStr[16];
+                char timeStr[16];
+
+                sprintf(dateStr, "%04u-%02u-%02u",
+                        (unsigned)t.year,
+                        (unsigned)t.month,
+                        (unsigned)t.day);
+                sprintf(timeStr, "%02u:%02u:%02u",
+                        (unsigned)t.hour,
+                        (unsigned)t.minute,
+                        (unsigned)t.second);
+
+                // fixed layout: two lines, centered in the value area
+                UI_PrintStringSmall(dateStr, menu_item_x1, menu_item_x2, 2);
+                UI_PrintStringSmall(timeStr, menu_item_x1, menu_item_x2, 4);
+
+                // underline highlight (no [] brackets)
+                if (gIsInSubMenu) {
+                    const uint8_t f = MENU_RTC_GetField();
+
+                    const uint8_t char_spacing = 7;
+                    const uint8_t date_len = 10;  // YYYY-MM-DD
+                    const uint8_t time_len = 8;   // HH:MM:SS
+
+                    const int16_t area_w = (int16_t)menu_item_x2 - (int16_t)menu_item_x1;
+                    int16_t date_off = 0;
+                    int16_t time_off = 0;
+
+                    if (area_w > (int16_t)(date_len * char_spacing)) {
+                        date_off = (area_w - (int16_t)(date_len * char_spacing) + 1) / 2;
+                    }
+                    if (area_w > (int16_t)(time_len * char_spacing)) {
+                        time_off = (area_w - (int16_t)(time_len * char_spacing) + 1) / 2;
+                    }
+
+                    const uint8_t date_start = (uint8_t)((int16_t)menu_item_x1 + date_off);
+                    const uint8_t time_start = (uint8_t)((int16_t)menu_item_x1 + time_off);
+
+                    uint8_t row = 2;
+                    uint8_t x = date_start;
+                    uint8_t w = 0;
+
+                    switch (f) {
+                        case 0: // year
+                            row = 2;
+                            x = (uint8_t)(date_start + 0 * char_spacing);
+                            w = (uint8_t)(4 * char_spacing);
+                            break;
+                        case 1: // month
+                            row = 2;
+                            x = (uint8_t)(date_start + 5 * char_spacing);
+                            w = (uint8_t)(2 * char_spacing);
+                            break;
+                        case 2: // day
+                            row = 2;
+                            x = (uint8_t)(date_start + 8 * char_spacing);
+                            w = (uint8_t)(2 * char_spacing);
+                            break;
+                        case 3: // hour
+                            row = 4;
+                            x = (uint8_t)(time_start + 0 * char_spacing);
+                            w = (uint8_t)(2 * char_spacing);
+                            break;
+                        case 4: // minute
+                            row = 4;
+                            x = (uint8_t)(time_start + 3 * char_spacing);
+                            w = (uint8_t)(2 * char_spacing);
+                            break;
+                        default: // second
+                            row = 4;
+                            x = (uint8_t)(time_start + 6 * char_spacing);
+                            w = (uint8_t)(2 * char_spacing);
+                            break;
+                    }
+
+                    // UI_PrintStringSmall writes each glyph starting at Start + 1
+                    if (w > 1) {
+                        UI_DrawUnderlineSmall(row, (uint8_t)(x + 1), (uint8_t)(w - 1));
+                    }
+                }
+
+                already_printed = true;
+            } else {
+                strcpy(String, "NO RTC");
+            }
+            break;
+        }
 
         case MENU_F_LOCK:
 //            if (!gIsInSubMenu && gUnlockAllTxConfCnt > 0&& gUnlockAllTxConfCnt < 10)

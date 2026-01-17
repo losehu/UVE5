@@ -343,6 +343,25 @@ void UI_PrintStringSmallBuffer(const char *pString, uint8_t *buffer) {
     }
 }
 
+void UI_InvertBlock(uint8_t row, uint8_t x, uint8_t width)
+{
+    if (row >= FRAME_LINES) {
+        return;
+    }
+    if (x >= LCD_WIDTH) {
+        return;
+    }
+
+    uint16_t end = (uint16_t)x + (uint16_t)width;
+    if (end > LCD_WIDTH) {
+        end = LCD_WIDTH;
+    }
+
+    for (uint16_t i = x; i < end; ++i) {
+        gFrameBuffer[row][i] ^= 0xFF;
+    }
+}
+
 void UI_DisplayFrequency(const char *string, uint8_t X, uint8_t Y, bool center) {
     const unsigned int char_width = 13;
     uint8_t *pFb0 = gFrameBuffer[Y] + X;

@@ -29,6 +29,7 @@
 #include "string.h"
 #include "app/messenger.h"
 #include "driver/adc1.h"
+#include "driver/pcf8563.h"
 #ifdef ENABLE_DOPPLER
 
 #include "app/doppler.h"
@@ -558,9 +559,9 @@ void setup() {
 #endif
 
 #if ENABLE_CHINESE_FULL == 0
-    gMenuListCount = 52;
-#else
     gMenuListCount = 53;
+#else
+    gMenuListCount = 54;
 #endif
     gKeyReading0 = KEY_INVALID;
     gKeyReading1 = KEY_INVALID;

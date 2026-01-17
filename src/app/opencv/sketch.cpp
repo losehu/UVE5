@@ -65,9 +65,9 @@ void setup() {
 #endif
 
 #if ENABLE_CHINESE_FULL == 0
-    gMenuListCount = 52;
-#else
     gMenuListCount = 53;
+#else
+    gMenuListCount = 54;
 #endif
 
     gKeyReading0 = KEY_INVALID;

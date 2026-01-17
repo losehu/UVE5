@@ -18,6 +18,7 @@
 #define APP_MENU_H
 
 #include "../driver/keyboard.h"
+#include "../driver/pcf8563.h"
 
 #ifdef ENABLE_F_CAL_MENU
 void writeXtalFreqCal(const int32_t value, const bool update_eeprom);
@@ -38,6 +39,13 @@ void MENU_CssScanFound(void);
 void MENU_StopCssScan(void);
 
 void MENU_ProcessKeys(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld);
+
+// RTC menu helper: returns current edit field (0..5) when editing RTC menu.
+uint8_t MENU_RTC_GetField(void);
+
+// RTC menu helper: returns the time that should be displayed for RTC menu.
+// When editing, this is the in-memory editable copy; otherwise it reads from RTC.
+bool MENU_RTC_GetDisplayTime(pcf8563_time_t *t);
 
 
 #endif
