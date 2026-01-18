@@ -35,12 +35,24 @@ static void Welcome_ReadBuffer(uint32_t address, void *buffer, uint8_t size)
 {
 #if defined(ARDUINO_ARCH_ESP32) && !defined(ENABLE_OPENCV)
     // Map the welcome resources from the radio's logical EEPROM window
-    // [0x02000..0x02FFF] into ESP32's 4KB shared partition.
-    if (address >= 0x02000 && (uint32_t)(address - 0x02000) < 0x1000) {
-        if (!shared_read_c(address - 0x02000, buffer, size)) {
-            memset(buffer, 0, size);
+    // [0x02000..0x02FFF] into ESP32's shared partition (use the first 4KB).
+    const uint32_t max = shared_size_c();
+    const uint32_t window = (max > 0x1000U) ? 0x1000U : max;
+    if (window > 0U && address >= 0x02000) {
+        const uint32_t off = address - 0x02000U;
+        if (off < window) {
+            uint32_t rd = (uint32_t)size;
+            if (rd > (window - off)) {
+                rd = (window - off);
+            }
+            if (rd > 0U && !shared_read_c(off, buffer, (size_t)rd)) {
+                memset(buffer, 0, (size_t)rd);
+            }
+            if (rd < (uint32_t)size) {
+                memset((uint8_t *)buffer + rd, 0, (size_t)((uint32_t)size - rd));
+            }
+            return;
         }
-        return;
     }
 
     EEPROM_ReadBuffer(address, buffer, size);

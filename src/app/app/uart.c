@@ -768,15 +768,17 @@ static void CMD_142B(const uint8_t *pBuffer)
     const uint32_t addr = UART_CmdAddr24_From052B(pCmd);
 
 #if defined(ARDUINO_ARCH_ESP32) && !defined(ENABLE_OPENCV)
-    // shared 分区只有 4KB
-    if (addr >= 0x1000U) {
+    const uint32_t max = shared_size_c();
+    if (max == 0U || addr >= max) {
         memset(Reply.Data.Data, 0, size);
     } else {
-        uint8_t rd = size;
-        if ((uint32_t)rd > (0x1000U - addr)) {
-            rd = (uint8_t)(0x1000U - addr);
+        uint32_t rd32 = (uint32_t)size;
+        if (rd32 > (max - addr)) {
+            rd32 = (max - addr);
         }
-        if (!shared_read_c(addr, Reply.Data.Data, rd)) {
+        const uint8_t rd = (uint8_t)rd32;
+
+        if (rd > 0U && !shared_read_c(addr, Reply.Data.Data, rd)) {
             memset(Reply.Data.Data, 0, rd);
         }
         if (rd < size) {
@@ -810,12 +812,15 @@ static void CMD_1438(const uint8_t *pBuffer)
     const uint32_t data_len = (pCmd->Size >= 2) ? (uint32_t)pCmd->Size - 2U : 0U;
 
 #if defined(ARDUINO_ARCH_ESP32) && !defined(ENABLE_OPENCV)
-    if (data_len > 0U && addr < 0x1000U) {
+    const uint32_t max = shared_size_c();
+    if (data_len > 0U && max > 0U && addr < max) {
         uint32_t wr = data_len;
-        if (wr > (0x1000U - addr)) {
-            wr = (0x1000U - addr);
+        if (wr > (max - addr)) {
+            wr = (max - addr);
         }
-        (void)shared_write_c(addr, &pCmd->Data[2], (size_t)wr);
+        if (wr > 0U) {
+            (void)shared_write_c(addr, &pCmd->Data[2], (size_t)wr);
+        }
     }
 #else
     // Fallback (non-ESP32 builds): behave like EEPROM write at the same address.

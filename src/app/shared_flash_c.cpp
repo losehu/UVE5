@@ -13,6 +13,12 @@ extern "C" bool shared_write_c(uint32_t offset, const void *data, size_t len)
     return shared_write((size_t)offset, data, len);
 }
 
+extern "C" uint32_t shared_size_c(void)
+{
+    const esp_partition_t *p = shared_part();
+    return p ? (uint32_t)p->size : 0U;
+}
+
 #else
 
 extern "C" bool shared_read_c(uint32_t, void *, size_t)
@@ -23,6 +29,11 @@ extern "C" bool shared_read_c(uint32_t, void *, size_t)
 extern "C" bool shared_write_c(uint32_t, const void *, size_t)
 {
     return false;
+}
+
+extern "C" uint32_t shared_size_c(void)
+{
+    return 0U;
 }
 
 #endif
