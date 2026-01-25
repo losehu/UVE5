@@ -41,12 +41,14 @@
 #include "../driver/eeprom.h"
 #include "../driver/uart1.h"
 #include "../driver/adc1.h"
+#include "../driver/pcf8563.h"
 #include "../functions.h"
 #include "../misc.h"
 #include "../settings.h"
 
 #if defined(ARDUINO_ARCH_ESP32) && !defined(ENABLE_OPENCV)
 #include "../shared_flash_c.h"
+#include "../bsp/dp32g030/rtc.h" // my_time (Beijing local time)
 #endif
 
 #if defined(ENABLE_OVERLAY)
@@ -181,6 +183,26 @@ typedef struct PACKED {
     Header_t Header;
     uint32_t Timestamp;
 } CMD_052F_t;
+
+typedef struct PACKED {
+    Header_t Header;
+    struct PACKED {
+        uint16_t Year;   // 4-digit year, e.g. 2026 (Beijing local time)
+        uint8_t Month;   // 1..12
+        uint8_t Day;     // 1..31
+        uint8_t Hour;    // 0..23
+        uint8_t Minute;  // 0..59
+        uint8_t Second;  // 0..59
+        uint8_t Flags;   // bit0: set-local-beijing (reserved, always 1 from k5web)
+    } Data;
+} CMD_0610_t;
+
+typedef struct PACKED {
+    Header_t Header;
+    struct PACKED {
+        uint8_t Status; // 0=OK, non-zero=error
+    } Data;
+} REPLY_0611_t;
 
 static const uint8_t Obfuscation[16] =
         {
@@ -493,6 +515,72 @@ static void CMD_052F(const uint8_t *pBuffer) {
     BACKLIGHT_TurnOff();
 
     SendVersion();
+}
+
+static uint8_t RTC_WeekdayFromYMD(uint16_t year, uint8_t month, uint8_t day)
+{
+    // 0=Sunday..6=Saturday (works for Gregorian calendar)
+    if (month < 3) {
+        month += 12;
+        year -= 1;
+    }
+    const uint16_t K = (uint16_t)(year % 100U);
+    const uint16_t J = (uint16_t)(year / 100U);
+    const uint16_t h =
+            (uint16_t)((day + (13U * (uint16_t)(month + 1U)) / 5U + K + (K / 4U) + (J / 4U) + 5U * J) % 7U);
+    // Zeller: 0=Saturday,1=Sunday,...6=Friday
+    const uint16_t d = (uint16_t)((h + 6U) % 7U); // 0=Sunday..6=Saturday
+    return (uint8_t)d;
+}
+
+static void CMD_0610(const uint8_t *pBuffer)
+{
+    const CMD_0610_t *pCmd = (const CMD_0610_t *)pBuffer;
+
+    REPLY_0611_t Reply;
+    Reply.Header.ID = 0x0611;
+    Reply.Header.Size = sizeof(Reply.Data);
+    Reply.Data.Status = 1U;
+
+    if (pCmd->Header.Size < sizeof(pCmd->Data)) {
+        SendReply(&Reply, sizeof(Reply));
+        return;
+    }
+
+    const uint16_t year = pCmd->Data.Year;
+    const uint8_t month = pCmd->Data.Month;
+    const uint8_t day = pCmd->Data.Day;
+    const uint8_t hour = pCmd->Data.Hour;
+    const uint8_t minute = pCmd->Data.Minute;
+    const uint8_t second = pCmd->Data.Second;
+
+    pcf8563_time_t t = {0};
+    t.year = year;
+    t.month = month;
+    t.day = day;
+    t.hour = hour;
+    t.minute = minute;
+    t.second = second;
+    t.weekday = RTC_WeekdayFromYMD(year, month, day);
+    t.voltage_low = false;
+
+    if (PCF8563_SetTime(&t)) {
+#if defined(ARDUINO_ARCH_ESP32) && !defined(ENABLE_OPENCV)
+        if (year >= 2000U && year <= 2099U) {
+            my_time[0] = (uint8_t)(year - 2000U);
+            my_time[1] = month;
+            my_time[2] = day;
+            my_time[3] = hour;
+            my_time[4] = minute;
+            my_time[5] = second;
+        }
+#endif
+        Reply.Data.Status = 0U;
+    } else {
+        Reply.Data.Status = 2U;
+    }
+
+    SendReply(&Reply, sizeof(Reply));
 }
 
 #ifdef ENABLE_UART_RW_BK_REGS
@@ -922,5 +1010,8 @@ void UART_HandleCommand(void) {
             CMD_0602_WriteBK4819Reg(UART_Command.Buffer);
             break;
 #endif
+        case 0x0610:
+            CMD_0610(UART_Command.Buffer);
+            break;
     }
 }

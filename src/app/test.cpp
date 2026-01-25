@@ -20,31 +20,15 @@
 //   // UART0：按你指定的引脚映射
 //   Uart0.begin(UART0_BAUD, SERIAL_8N1, UART0_RX_PIN, UART0_TX_PIN);
 //   Serial.printf("UART0 started: baud=%lu TX=%d RX=%d\n", (unsigned long)UART0_BAUD, UART0_TX_PIN, UART0_RX_PIN);
+// pinMode(41,OUTPUT);
 // }
 
 // void loop() {
 //   // 1) USB->UART0
-//   while (Serial.available() > 0) {
-//     const int c = Serial.read();
-//     if (c >= 0) {
-//       Uart0.write((uint8_t)c);
-//     }
-//   }
+//  digitalWrite(41,HIGH);
 
-//   // 2) UART0->USB
-//   while (Uart0.available() > 0) {
-//     const int c = Uart0.read();
-//     if (c >= 0) {
-//       Serial.write((uint8_t)c);
-//     }
-//   }
-
-//   // 3) 周期性从 UART0 发包，验证 TX
-//   static uint32_t lastMs = 0;
-//   static uint32_t counter = 0;
-//   const uint32_t now = millis();
-//   if ((uint32_t)(now - lastMs) >= 1000u) {
-//     lastMs = now;
-//     Uart0.printf("[UART0] ping %lu\r\n", (unsigned long)counter++);
-//   }
+// delay(1000);
+//     digitalWrite(41,LOW);
+//     delay(1000);
+// Serial.println("Hello World");
 // }

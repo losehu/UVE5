@@ -18,7 +18,16 @@ static constexpr size_t FLASH_SECTOR = 0x1000; // 4KB
 
 // 查找共享分区
 inline const esp_partition_t* shared_part() {
-  return esp_partition_find_first(ESP_PARTITION_TYPE_DATA, SHARED_SUBTYPE, SHARED_LABEL);
+  static const esp_partition_t* cached = nullptr;
+  static bool cached_valid = false;
+  if (cached_valid) return cached;
+  cached_valid = true;
+  // Prefer the canonical label, but fall back to "any label" in case
+  // a compatible partition table uses a different label.
+  cached = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, SHARED_SUBTYPE, SHARED_LABEL);
+  if (cached) return cached;
+  cached = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, SHARED_SUBTYPE, nullptr);
+  return cached;
 }
 
 // 任意位置读取 len 字节

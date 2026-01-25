@@ -12,7 +12,6 @@
 #include "driver/system.h"
 #include "frequencies.h"
 #include "misc.h"
-#include "app/doppler.h"
 #include "string.h"
 #include <stdio.h>
 #include "ui/ui.h"
@@ -30,6 +29,7 @@
 #include "app/messenger.h"
 #include "driver/adc1.h"
 #include "driver/pcf8563.h"
+#include "driver/es8311.h"
 #ifdef ENABLE_DOPPLER
 
 #include "app/doppler.h"
@@ -84,6 +84,60 @@
 #include "driver/st7565.h"
 #include "driver/keyboard.h"
 
+#ifndef ENABLE_HW_TEST_MODE
+#define ENABLE_HW_TEST_MODE 1
+#endif
+
+#if ENABLE_HW_TEST_MODE
+static void DumpPcfTimestamp(const pcf8563_time_t &ts) {
+    Serial.printf("PCF8563 time: %04u-%02u-%02u %02u:%02u:%02u (%s)\n",
+                  (unsigned)ts.year,
+                  (unsigned)ts.month,
+                  (unsigned)ts.day,
+                  (unsigned)ts.hour,
+                  (unsigned)ts.minute,
+                  (unsigned)ts.second,
+                  ts.voltage_low ? "VL=1" : "VL=0");
+}
+
+static void RunHardwareTestMode(void) {
+    Serial.println("Hardware Test Mode: Audio + RTC");
+    AUDIO_AudioPathOn();
+
+    Serial.println("  - ES8311 codec");
+    if (ES8311_Init()) {
+        Serial.println("    ES8311 ready, playing verification tone.");
+        if (!ES8311_PlayTestTone(300)) {
+            Serial.println("    ES8311 tone playback failed.");
+        }
+    } else {
+        Serial.println("    ES8311 initialization failed.");
+    }
+
+    Serial.println("  - PCF8563 RTC");
+    if (PCF8563_Probe()) {
+        Serial.println("    PCF8563 responded.");
+        pcf8563_time_t time = {0};
+        if (PCF8563_ReadTime(&time)) {
+            DumpPcfTimestamp(time);
+        } else {
+            Serial.println("    PCF8563 read time failed.");
+        }
+    } else {
+        Serial.println("    PCF8563 probe failed.");
+    }
+    Serial.println("Hardware Test Mode completed.");
+    //         pinMode(41,OUTPUT);
+
+    // while(1)
+    // {
+    //     digitalWrite(41,HIGH);
+    //     delay(1000);
+    //     digitalWrite(41,LOW);
+    //     delay(1000);
+    // }
+}
+#endif
 #if !defined(ENABLE_OPENCV)
 #include "assets/ckx_8lvl_128x64.h"
 #endif
@@ -514,9 +568,27 @@ static void ScreenCkxTest() {
 void setup() {
         switch_to_factory_and_restart();
   Serial.begin(115200);
+  delay(2000);
   Serial.println("Initializing devices...");
-  BOARD_Init();
+  Serial.println("Probing ES8311 codec...");
+#if ENABLE_HW_TEST_MODE
+  RunHardwareTestMode();
+#else
+  AUDIO_AudioPathOn();
 
+  if (ES8311_Init()) {
+    Serial.println("ES8311 ready, playing verification tone.");
+    if (!ES8311_PlayTestTone(400)) {
+      Serial.println("ES8311 tone playback failed.");
+    }
+  } else {
+    Serial.println("ES8311 initialization failed.");
+  }
+#endif
+  BOARD_Init();
+  delay(2000);
+  pinMode(41, OUTPUT);
+  digitalWrite(41, HIGH); // Enable 5V for peripherals
   SCHEDULER_Init();
 
 
@@ -537,11 +609,7 @@ void setup() {
 #ifdef ENABLE_MDC1200
     MDC1200_init();
 #endif
-#ifdef ENABLE_DOPPLER
 
-    RTC_INIT();
-    INIT_DOPPLER_DATA();
-#endif
     RADIO_ConfigureChannel(0, VFO_CONFIGURE_RELOAD);
     RADIO_ConfigureChannel(1, VFO_CONFIGURE_RELOAD);
 

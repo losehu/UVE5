@@ -157,6 +157,41 @@ typedef struct PeakInfo {
     uint32_t f;
     uint16_t i;
 } PeakInfo;
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// Expose shared spectrum state for other modules (e.g., TLE/Doppler UI).
+extern SpectrumSettings settings;
+extern ScanInfo scanInfo;
+extern bool monitorMode;
+extern bool isListening;
+extern bool isTransmitting;
+extern bool lockAGC;
+extern uint8_t menuState;
+extern RegisterSpec registerSpecs[];
+extern const uint8_t registerSpecsCount;
+extern const char *bwOptions[];
+extern uint32_t currentFreq;
+
+bool IsPeakOverLevel(void);
+
+// Helper utilities used by the TLE/Doppler UI.
+uint8_t DBm2S(int dbm);
+int Rssi2DBm(uint16_t rssi);
+uint8_t Rssi2PX(uint16_t rssi, uint8_t pxMin, uint8_t pxMax);
+uint16_t GetRegMenuValue(uint8_t st);
+void SetRegMenuValue(uint8_t st, bool add);
+void ClampRssiTriggerLevel(void);
+void UpdateRssiTriggerLevel(bool inc);
+void UpdateStill(void);
+void UpdateListening(void);
+void SetF(uint32_t f);
+void ToggleRX(bool on);
+#ifdef ENABLE_DOPPLER
+void ToggleTX(bool on);
+#endif
 extern uint32_t tempFreq;
 extern char freqInputString[11];
 extern uint8_t freqInputIndex ;
@@ -173,6 +208,10 @@ extern KEY_Code_t freqInputArr[10];
 #ifdef ENABLE_DOPPLER
 extern bool DOPPLER_MODE;
 void RTCHandler();
+#endif
+
+#ifdef __cplusplus
+}
 #endif
 #endif /* ifndef SPECTRUM_H */
 

@@ -190,9 +190,7 @@ void SI_deinit() {
     SI47XX_PowerDown();
     BK4819_RX_TurnOn();
     digitalWrite(AUDIO_PATH, HIGH);  // Turn on audio path
-#ifdef ENABLE_DOPPLER
-    SYSCON_DEV_CLK_GATE|=(1<<22);
-#endif
+
 }
 
 bool display_flag = 0;
@@ -531,9 +529,6 @@ void SI_key(KEY_Code_t key, bool KEY_TYPE1, bool KEY_TYPE2, bool KEY_TYPE3, KEY_
 
 
 void SI4732_Main() {
-#ifdef ENABLE_DOPPLER
-    SYSCON_DEV_CLK_GATE= SYSCON_DEV_CLK_GATE & ( ~(1 << 22));
-#endif
 
     light_open();
     SI_init();
@@ -549,9 +544,9 @@ void SI4732_Main() {
             ST7565_BlitStatusLine();
             cnt = 0;
 
-            if (si4732mode == SI47XX_FM) {
-                if (SI47XX_GetRDS()) display_flag = 1;
-            }
+            #if defined(ENABLE_DOPPLER) && defined(SYSCON_DEV_CLK_GATE)
+                SYSCON_DEV_CLK_GATE = SYSCON_DEV_CLK_GATE & (~(1 << 22));
+            #endif
             if (SNR_flag) {
                 RSQ_GET();
                 display_flag = 1;

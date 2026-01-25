@@ -18,12 +18,7 @@
 #include "functions.h"
 #include "stdbool.h"
 
-#ifdef ENABLE_DOPPLER
 
-#include "app/doppler.h"
-#include "bsp/dp32g030/rtc.h"
-
-#endif
 
 #include "app/spectrum.h"
 #include "am_fix.h"
@@ -43,7 +38,7 @@
 #include "ui/helper.h"
 #include "ui/main.h"
 
-static void ToggleRX(bool on);
+void ToggleRX(bool on);
 
 struct FrequencyBandInfo {
     uint32_t lower;
@@ -144,12 +139,13 @@ RegisterSpec registerSpecs[] = {
         {"IF",   BK4819_REG_3D, 0, 0xFFFF, 0x2aaa},
         // {"MIX", 0x13, 3, 0b11, 1}, // '
 };
+const uint8_t registerSpecsCount = (uint8_t)ARRAY_SIZE(registerSpecs);
 
 uint16_t statuslineUpdateTimer = 0;
 VfoState_t txAllowState;
 bool isTransmitting = false;
 
-static uint8_t DBm2S(int dbm) {
+uint8_t DBm2S(int dbm) {
     uint8_t i = 0;
     dbm *= -1;
     for (i = 0; i < ARRAY_SIZE(U8RssiMap); i++) {
@@ -202,7 +198,7 @@ void SetTxF(uint32_t f, bool precise) {
 }
 
 #ifdef ENABLE_DOPPLER
-static void ToggleTX(bool on) {
+void ToggleTX(bool on) {
     if (isTransmitting == on) {
         return;
     }
@@ -215,8 +211,8 @@ static void ToggleTX(bool on) {
 
     if (on) {
         TX_ON=1;
-        fMeasure = satellite_data.UPLink;
-
+        // Spectrum/Doppler TX mode: transmit on the currently tuned frequency.
+        // (Legacy satellite_data/satellite globals are not available in this build.)
         AUDIO_AudioPathOff();
 
         SetTxF(fMeasure, true);
@@ -231,11 +227,8 @@ static void ToggleTX(bool on) {
         BK4819_WriteRegister(BK4819_REG_30, 0xC1FE);
         BK4819_WriteRegister(BK4819_REG_51, 0x9033);
 
-        //亚音
-        if (satellite.SEND_CTCSS == 0)
-            BK4819_ExitSubAu();
-        else
-            BK4819_SetCTCSSFrequency(satellite.SEND_CTCSS);
+        // CTCSS: disabled in this build variant
+        BK4819_ExitSubAu();
 
         //功率
         FREQUENCY_Band_t Band = FREQUENCY_GetBand(fMeasure);
@@ -257,8 +250,7 @@ static void ToggleTX(bool on) {
 //        SYSTEM_DelayMs(200);
         BK4819_SetupPowerAmplifier(0, 0);
         RegRestore();
-//TODO:发射频率
-        fMeasure = satellite_data.DownLink;
+        // Restore tuned frequency after TX
         SetTxF(fMeasure, true);
                 TX_ON=0;
 
@@ -268,11 +260,11 @@ static void ToggleTX(bool on) {
 }
 #endif
 
-static int Rssi2DBm(uint16_t rssi) {
+int Rssi2DBm(uint16_t rssi) {
     return (rssi / 2) - 160 + dBmCorrTable[gRxVfo->Band];
 }
 
-static uint16_t GetRegMenuValue(uint8_t st) {
+uint16_t GetRegMenuValue(uint8_t st) {
     RegisterSpec s = registerSpecs[st];
     return (BK4819_ReadRegister(s.num) >> s.offset) & s.mask;
 }
@@ -282,7 +274,7 @@ void LockAGC() {
     lockAGC = true;
 }
 
-static void SetRegMenuValue(uint8_t st, bool add) {
+void SetRegMenuValue(uint8_t st, bool add) {
     uint16_t v = GetRegMenuValue(st);
     RegisterSpec s = registerSpecs[st];
 
@@ -364,7 +356,7 @@ static void ToggleAFDAC(bool on) {
     BK4819_WriteRegister(BK4819_REG_30, Reg);
 }
 
-static void SetF(uint32_t f) {
+void SetF(uint32_t f) {
     fMeasure = f;
 
     BK4819_SetFrequency(fMeasure);
@@ -438,7 +430,7 @@ static uint16_t GetRssi() {
     return rssi;
 }
 
-static void ToggleRX(bool on) {
+void ToggleRX(bool on) {
 //    if(isTransmitting&&on)return;
 
 
@@ -561,13 +553,13 @@ static uint16_t dbm2rssi(int dBm) {
     return (dBm + 160 - dBmCorrTable[gRxVfo->Band]) * 2;
 }
 
-static void ClampRssiTriggerLevel() {
+void ClampRssiTriggerLevel(void) {
     settings.rssiTriggerLevel =
             clamp(settings.rssiTriggerLevel, dbm2rssi(settings.dbMin),
                   dbm2rssi(settings.dbMax));
 }
 
-static void UpdateRssiTriggerLevel(bool inc) {
+void UpdateRssiTriggerLevel(bool inc) {
     if (inc)
         settings.rssiTriggerLevel += 2;
     else
@@ -786,7 +778,7 @@ static bool IsBlacklisted(uint16_t idx)
 
 // Draw things
 // applied x2 to prevent initial rounding
-static uint8_t Rssi2PX(uint16_t rssi, uint8_t pxMin, uint8_t pxMax) {
+uint8_t Rssi2PX(uint16_t rssi, uint8_t pxMin, uint8_t pxMax) {
     const int DB_MIN = settings.dbMin << 1;
     const int DB_MAX = settings.dbMax << 1;
     const int DB_RANGE = DB_MAX - DB_MIN;
@@ -846,25 +838,9 @@ static void DrawStatus() {
 #else
     sprintf(String, "%d/%d", settings.dbMin, settings.dbMax);
 #endif
-#ifdef ENABLE_DOPPLER
 
-    if (DOPPLER_MODE) {
-        //UI绘制状态栏
-        memset(gStatusLine, 0x7f, 39);
-        GUI_DisplaySmallest(satellite.name, 2, 1, true, false);
-        GUI_DisplaySmallest(String, 42 + (settings.dbMax > -100 ? 4 : 0), 1, true, true);
-
-        sprintf(String, "%3s", gModulationStr[settings.modulationType]);
-        GUI_DisplaySmallest(String, 42 + 38, 1, true, true);
-
-        sprintf(String, "%s", bwOptions[settings.listenBw]);
-        GUI_DisplaySmallest(String, 42 + 53 - (settings.listenBw == 0 ? 8 : 0), 1, true, true);
-    } else {
-#endif
     GUI_DisplaySmallest(String, 0, 1, true, true);
-#ifdef ENABLE_DOPPLER
-    }
-#endif
+
 
     DrawPower();
 
@@ -1072,20 +1048,7 @@ static void OnKeyDownFreqInput(uint8_t key) {
             UpdateFreqInput(key);
             break;
         case KEY_MENU:
-#ifdef ENABLE_DOPPLER
-            if(DOPPLER_MODE)
-           {
 
-
-        time[3]=tempFreq/100000;
-        time[4]=(tempFreq/1000)%100;
-        time[5]=(tempFreq/10)%100;
-                        RTC_Set();
-                     SetState(previousState);
-
-                break;
-               }
-#endif
             if (tempFreq < F_MIN || tempFreq > F_MAX) {
                 break;
             }
@@ -1215,7 +1178,7 @@ void OnKeyDownStill(KEY_Code_t key) {
 //    show_uint32(tempFreq,3);
 }
 
-static void UpdateStill() {
+void UpdateStill(void) {
     if (TX_ON)return;
     Measure();
     redrawScreen = true;
@@ -1243,46 +1206,7 @@ static void RenderSpectrum() {
     DrawNums();
 }
 
-#ifdef ENABLE_DOPPLER
 
-static void Draw_DOPPLER_Process(uint8_t DATA_LINE) {
-    int process = 0;
-    if (time_diff > 0)//还没来卫星
-    {
-        if (time_diff > 1000)//还早
-        {
-            strcpy(String, "Long");
-
-        } else//1000s以内
-        {
-            sprintf(String, "-%4d sec", time_diff);
-            process = time_diff * 45 / 1000;
-        }
-    } else { //已经来了
-        if (time_diff1 >= 0)//正在过境
-        {
-            sprintf(String, "+%4d sec", satellite.sum_time + time_diff);
-            process = 45 - (satellite.sum_time + time_diff) * 45 / satellite.sum_time;
-        } else {
-
-            strcpy(String, "Passed");
-        }
-    }
-    GUI_DisplaySmallest(String, 85, DATA_LINE + 15, false, true);
-    memset(&gFrameBuffer[6][80], 0b01000000, 45);
-    gFrameBuffer[6][79] = 0b00111110;
-    gFrameBuffer[6][45 + 80] = 0b00111110;
-    for (int i = 0; i < 45; i++) {
-        if (i < process)
-            gFrameBuffer[6][i + 80] = 0b00111110;
-        else
-            gFrameBuffer[6][i + 80] = 0b00100010;
-    }
-    sprintf(String, "20%02d-%02d-%02d %02d:%02d:%02d", time[0], time[1], time[2], time[3], time[4], time[5]);
-    GUI_DisplaySmallest(String, 1, DATA_LINE + 23, false, true);
-}
-
-#endif
 
 static void RenderStill() {
     DrawF(fMeasure);//绘制频率
@@ -1317,12 +1241,7 @@ static void RenderStill() {
     int dbm = Rssi2DBm(scanInfo.rssi);
     uint8_t s = DBm2S(dbm);
     bool fill = true;
-#ifdef ENABLE_DOPPLER
-    if ((monitorMode || IsPeakOverLevel()) && DOPPLER_MODE) {
-        memset(gFrameBuffer[2] + DBM_X - 2, 0b11111110, 51);
-        fill = false;
-    }
-#endif
+
     sprintf(String, "S%u", s);
     GUI_DisplaySmallest(String, S_X, S_LINE, false, true);
     sprintf(String, "%4d/%4ddBm", dbm, Rssi2DBm(settings.rssiTriggerLevel));
@@ -1365,22 +1284,6 @@ static void RenderStill() {
         GUI_DisplaySmallest(String, offset + 2, DATA_LINE + 7, false,
                             menuState != idx);
     }
-#ifdef ENABLE_DOPPLER
-
-    if (DOPPLER_MODE) {
-        Draw_DOPPLER_Process(26);
-        bool flag = true;
-        if (!isTransmitting)
-            sprintf(String, "UPLink:%4d.%05d", satellite_data.UPLink / 100000, satellite_data.UPLink % 100000);
-        else {
-            memset(gFrameBuffer[5], 0x7f, 77);
-            flag = false;
-            sprintf(String, "DownLink:%4d.%05d", satellite_data.DownLink / 100000, satellite_data.DownLink % 100000);
-        }
-        GUI_DisplaySmallest(String, 1, DATA_LINE + 15, false, flag);
-
-    }
-#endif
 }
 
 static void Render() {
@@ -1485,7 +1388,7 @@ static void UpdateScan() {
 }
 
 
-static void UpdateListening() {
+void UpdateListening(void) {
     preventKeypress = false;
     if (currentState == STILL) {
         listenT = 0;
@@ -1634,42 +1537,10 @@ static void Tick() {
     }
 #endif
     while (isInitialized) {
-//#ifdef ENABLE_DOPPLER
-//
-//        if (DOPPLER_MODE) {
-//            satellite_data.DownLink=43850000;
-//            SetF(satellite_data.DownLink);
-//            currentFreq = satellite_data.DownLink;
-//        }
-//#endif
-#ifdef ENABLE_DOPPLER
-        if (DOPPLER_MODE&&!isTransmitting&&currentFreq!=satellite_data.DownLink) {
-            SetF(satellite_data.DownLink);
-            currentFreq = satellite_data.DownLink;
-        }
 
-#endif
         Tick();
 
     }
 
 }
 
-#ifdef ENABLE_DOPPLER
-
-void RTCHandler(void) {
-
-
-    RTC_Get();
-    int32_t NOW_UNIX_TIME = UNIX_TIME(time);
-    time_diff = satellite.START_TIME_UNIX - NOW_UNIX_TIME; //卫星开始时间-现在时间
-    time_diff1 = satellite.sum_time + time_diff;//结束-开始+开始-现在
-
-    READ_DATA(time_diff, time_diff1);
-
-
-    RTC_IF |= (1 << 5);//清除中断标志位
-
-}
-
-#endif
