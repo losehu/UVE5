@@ -568,7 +568,6 @@ static void ScreenCkxTest() {
 void setup() {
         switch_to_factory_and_restart();
   Serial.begin(115200);
-  delay(2000);
   Serial.println("Initializing devices...");
   Serial.println("Probing ES8311 codec...");
 #if ENABLE_HW_TEST_MODE

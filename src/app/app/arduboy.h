@@ -31,6 +31,21 @@ void TrenchRun_Init(void);
 void TrenchRun_Loop(void);
 #endif
 
+#ifdef ENABLE_ARDDRIVEN
+void ArdDriven_Init(void);
+void ArdDriven_Loop(void);
+#endif
+
+#ifdef ENABLE_CIRCUIT_DUDE
+void CircuitDude_Init(void);
+void CircuitDude_Loop(void);
+#endif
+
+#ifdef ENABLE_CRATES3D
+void Crates3D_Init(void);
+void Crates3D_Loop(void);
+#endif
+
 #ifdef __cplusplus
 }
 #endif

@@ -381,7 +381,7 @@ void Arduboy2::drawChar(int16_t x, int16_t y, char c) {
                 const int16_t py = static_cast<int16_t>(y + static_cast<int16_t>(row * scale));
                 for (uint8_t dx = 0; dx < scale; ++dx) {
                     for (uint8_t dy = 0; dy < scale; ++dy) {
-                        drawPixel(static_cast<int16_t>(px + dx), static_cast<int16_t>(py + dy), WHITE);
+                        drawPixel(static_cast<int16_t>(px + dx), static_cast<int16_t>(py + dy), textColor);
                     }
                 }
             }

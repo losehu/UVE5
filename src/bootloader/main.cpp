@@ -829,12 +829,11 @@ void setup()
 
       // Flash over UART0 (GPIO43/44). Keep Serial (USB CDC) for logs.
       (void)receive_and_flash_app0(Uart0);
-    delay(1000); // 等待串口稳定
+    delay(100); // 等待串口稳定
   }
   else
   {
     Serial.println("未按MENU：启动app00...");
-    delay(1000); // 等待串口稳定
   }
 
   jump_to_app0_and_restart();

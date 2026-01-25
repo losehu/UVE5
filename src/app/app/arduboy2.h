@@ -59,6 +59,11 @@
 #define RGB_OFF 0
 #endif
 
+// Sketches that expect Arduboy2's EEPROM reservation model.
+#ifndef EEPROM_STORAGE_SPACE_START
+#define EEPROM_STORAGE_SPACE_START 16
+#endif
+
 // Minimal geometry helpers used by some Arduboy sketches.
 struct Rect {
     int16_t x;
@@ -78,6 +83,8 @@ public:
     struct Audio {
         bool enabled() const { return enabledFlag; }
         void toggle() { enabledFlag = !enabledFlag; }
+        void begin() {}
+        void saveOnOff() {}
         void on() { enabledFlag = true; }
         void off() { enabledFlag = false; }
 
@@ -96,6 +103,7 @@ public:
     bool pressed(uint8_t buttons) const;
     bool justPressed(uint8_t buttons) const;
     bool justReleased(uint8_t buttons) const;
+    bool notPressed(uint8_t buttons) const { return !pressed(buttons); }
 
     void clear();
     void display();
@@ -116,8 +124,22 @@ public:
         }
     }
     void drawBitmap(int16_t x, int16_t y, const uint8_t *bitmap, int16_t w, int16_t h, uint8_t color = WHITE);
+    void drawSlowXYBitmap(int16_t x, int16_t y, const uint8_t *bitmap, int16_t w, int16_t h, uint8_t color = WHITE) {
+        drawBitmap(x, y, bitmap, w, h, color);
+    }
+    void drawChar(int16_t x, int16_t y, unsigned char c, uint8_t color, uint8_t /*bg*/, uint8_t size) {
+        const uint8_t oldSize = textSize;
+        const uint8_t oldColor = textColor;
+        textSize = size ? size : 1;
+        textColor = color;
+        drawChar(x, y, static_cast<char>(c));
+        textColor = oldColor;
+        textSize = oldSize;
+    }
 
     void setCursor(int16_t x, int16_t y);
+    int16_t getCursorX() const { return cursorX; }
+    int16_t getCursorY() const { return cursorY; }
     void setTextSize(uint8_t size);
     void print(const char *s);
     void println(const char *s) {
@@ -132,14 +154,24 @@ public:
     void print(uint32_t value);
 
     void setButtonState(uint8_t state);
+    uint8_t buttonsState() const { return rawButtons; }
     void digitalWriteRGB(uint8_t r, uint8_t g, uint8_t b);
     void setRGBled(uint8_t r, uint8_t g, uint8_t b) { digitalWriteRGB(r, g, b); }
+
+    // Upstream Arduboy2 system helpers (no-ops for UVE5).
+    void boot() {}
+    void blank() {}
+    void flashlight() {}
+    void systemButtons() {}
 
     bool nextFrameDEV() { return nextFrame(); }
     uint8_t cpuLoad() const { return 0; }
 
     const uint8_t *getBuffer() const { return buffer; }
     uint8_t *getBuffer() { return buffer; }
+
+    // Upstream Arduboy2 exposes `sBuffer`. Keep an alias for compatibility.
+    uint8_t *sBuffer = buffer;
 
 private:
     uint8_t buffer[width * height / 8];
@@ -154,6 +186,7 @@ private:
     int16_t cursorX = 0;
     int16_t cursorY = 0;
     uint8_t textSize = 1;
+    uint8_t textColor = WHITE;
 
     void drawChar(int16_t x, int16_t y, char c);
 
@@ -190,6 +223,12 @@ class ArduboyTones {
 public:
     explicit ArduboyTones(bool (*enabled_fn)()) : enabled(enabled_fn) {}
 
+    void tone(uint16_t /*frequency*/, uint16_t /*duration_ms*/) {
+        if (enabled && !enabled()) {
+            return;
+        }
+    }
+
     void tones(const uint16_t * /*sequence*/) {
         if (enabled && !enabled()) {
             return;
@@ -209,4 +248,3 @@ public:
 };
 
 #endif
-

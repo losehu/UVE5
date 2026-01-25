@@ -331,6 +331,15 @@ static ArduboyGame gArduboyGames[] = {
 #ifdef ENABLE_TRENCH_RUN
     {"TRENCH", &TrenchRun_Init, &TrenchRun_Loop},
 #endif
+#ifdef ENABLE_ARDDRIVEN
+    {"DRIVEN", &ArdDriven_Init, &ArdDriven_Loop},
+#endif
+#ifdef ENABLE_CIRCUIT_DUDE
+    {"CDUDE", &CircuitDude_Init, &CircuitDude_Loop},
+#endif
+#ifdef ENABLE_CRATES3D
+    {"CRATES", &Crates3D_Init, &Crates3D_Loop},
+#endif
 };
 
 static const int gArduboyGameCount = sizeof(gArduboyGames) / sizeof(gArduboyGames[0]);

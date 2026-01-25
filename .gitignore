@@ -9,3 +9,4 @@ uv-k5-firmware-custom/
 *.o
 /bin/*
 uv-k5-firmware-custom-doppler
+examples/
