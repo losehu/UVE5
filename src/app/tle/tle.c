@@ -1437,12 +1437,6 @@ void TLE_KEY() {
         || mode == PIC
     ) {
         switch (my_kbd.current) {
-            case KEY_4:
-                before_mode = mode;
-                mode = LOCAL;
-                INIT_LOCALINPUT();
-                local_inflag = 0;
-                return;
             case KEY_8:
                 ENABLE_BTC = 1 - ENABLE_BTC;
                 return;

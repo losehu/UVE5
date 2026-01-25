@@ -16,6 +16,7 @@
 #include "../driver/eeprom.h"
 #include <string.h>
 #include <stdlib.h>  // abs()
+#include <stdio.h>
 #include "../bitmaps.h"
 #include "../driver/uart1.h"
 #include "../app/dtmf.h"
@@ -151,6 +152,8 @@ const t_menu_item MenuList[] =
                 {/*"BatTyp",*/ VOICE_ID_INVALID, MENU_BATTYP, STR_BAT_VOL}, // battery type 1600/2200mAh
                 {/*"RTC",*/    VOICE_ID_INVALID, MENU_RTC,
                                STR_RTC_TIME},
+                {/*"LOC",*/    VOICE_ID_INVALID, MENU_LOC,
+                               STR_LOC},
                 {/*"Reset",*/  VOICE_ID_INITIALISATION, MENU_RESET,
                                STR_RESET}, // might be better to move this to the hidden menu items ?
 
@@ -599,6 +602,27 @@ static void UI_DrawUnderlineSmall(uint8_t line, uint8_t x, uint8_t width)
     }
 }
 
+static void UI_InvertLineRange(uint8_t line, uint8_t x1, uint8_t x2)
+{
+    if (line >= FRAME_LINES) {
+        return;
+    }
+    if (x1 >= LCD_WIDTH) {
+        return;
+    }
+
+    if (x2 >= LCD_WIDTH) {
+        x2 = LCD_WIDTH - 1;
+    }
+    if (x2 < x1) {
+        return;
+    }
+
+    for (uint16_t x = x1; x <= x2; ++x) {
+        gFrameBuffer[line][x] ^= 0xFF;
+    }
+}
+
 void UI_DisplayMenu(void) {
     const unsigned int menu_list_width = 6; // max no. of characters on the menu list (left side)
     const unsigned int menu_item_x1 = (8 * menu_list_width);//+ 2;
@@ -628,8 +652,9 @@ void UI_DisplayMenu(void) {
     // draw the little sub-menu triangle marker绘制子菜单三角标志：
     //const void *BITMAP_CurrentIndicator = BITMAP_MARKER;
 
-    if (gIsInSubMenu)
+    if (gIsInSubMenu && UI_MENU_GetCurrentMenuId() != MENU_LOC) {
         memmove(gFrameBuffer[2] + 41, BITMAP_VFO_Default, sizeof(BITMAP_VFO_Default));
+    }
 #ifndef ENABLE_MDC1200
     uint8_t add = 1;
 
@@ -1433,6 +1458,93 @@ void UI_DisplayMenu(void) {
             } else {
                 strcpy(String, "NO RTC");
             }
+            break;
+        }
+
+        case MENU_LOC: {
+            menu_location_t loc;
+            (void)MENU_LOC_GetDisplay(&loc);
+
+            const bool editing = gIsInSubMenu;
+            const uint8_t f = MENU_LOC_GetField();
+            const char *input = MENU_LOC_GetInput();
+
+            char val[20];
+            char line[32];
+
+            // Print three lines in the value area.
+            const uint8_t x = (uint8_t)(menu_item_x1 - 12);
+
+            // LAT (纬度)
+            const bool sel_lat = editing && (f == 0);
+            if (sel_lat && input) {
+#ifdef ENABLE_ENGLISH
+                snprintf(line, sizeof(line), "LAT:%s", input);
+#else
+                snprintf(line, sizeof(line), "\xCE\xB3\xB6\xC8:%s", input);
+#endif
+            } else {
+                snprintf(val, sizeof(val), "%.4f", loc.lat);
+#ifdef ENABLE_ENGLISH
+                snprintf(line, sizeof(line), "LAT:%s", val);
+#else
+                snprintf(line, sizeof(line), "\xCE\xB3\xB6\xC8:%s", val);
+#endif
+            }
+            UI_PrintStringSmall(line, x, menu_item_x2, 0);
+
+            // LON (经度)
+            const bool sel_lon = editing && (f == 1);
+            if (sel_lon && input) {
+#ifdef ENABLE_ENGLISH
+                snprintf(line, sizeof(line), "LON:%s", input);
+#else
+                snprintf(line, sizeof(line), "\xBE\xAD\xB6\xC8:%s", input);
+#endif
+            } else {
+                snprintf(val, sizeof(val), "%.4f", loc.lon);
+#ifdef ENABLE_ENGLISH
+                snprintf(line, sizeof(line), "LON:%s", val);
+#else
+                snprintf(line, sizeof(line), "\xBE\xAD\xB6\xC8:%s", val);
+#endif
+            }
+            UI_PrintStringSmall(line, x, menu_item_x2, 2);
+
+            // ALT (高度)
+            const bool sel_alt = editing && (f == 2);
+            if (sel_alt && input) {
+#ifdef ENABLE_ENGLISH
+                snprintf(line, sizeof(line), "ALT:%s", input);
+#else
+                snprintf(line, sizeof(line), "\xB8\xDF\xB6\xC8:%s", input);
+#endif
+            } else {
+                snprintf(val, sizeof(val), "%.0f", loc.height);
+#ifdef ENABLE_ENGLISH
+                snprintf(line, sizeof(line), "ALT:%s", val);
+#else
+                snprintf(line, sizeof(line), "\xB8\xDF\xB6\xC8:%s", val);
+#endif
+            }
+            UI_PrintStringSmall(line, x, menu_item_x2, 4);
+
+            // Hint for entering dot/sign while editing
+            if (editing) {
+                UI_PrintStringSmall("F:-  *:.", x, menu_item_x2, 6);
+            }
+
+            // Highlight the selected field by inverting its line (no extra arrow).
+            if (editing) {
+                static const uint8_t loc_rows[3] = {0, 2, 4}; // lat, lon, alt
+                const uint8_t row = (f < 3) ? loc_rows[f] : 0;
+                UI_InvertLineRange(row, x, menu_item_x2);
+#ifndef ENABLE_ENGLISH
+                UI_InvertLineRange((uint8_t)(row + 1), x, menu_item_x2);
+#endif
+            }
+
+            already_printed = true;
             break;
         }
 

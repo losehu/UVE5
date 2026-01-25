@@ -15,8 +15,11 @@
 extern "C" {
 #include "../driver/st7565.h"
 #include "../misc.h"
+#include "../bitmaps.h"
 #include "../ui/helper.h"
+#include "../ui/battery.h"
 #include "../ui/ui.h"
+#include "../helper/battery.h"
 }
 
 enum ArduboyMode {
@@ -441,8 +444,8 @@ void ARDUBOY_ProcessKeys(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
         if (bKeyPressed) {
             return;
         }
-        // Menu navigation uses keypad 2/8; the dedicated UP/DOWN keys are A/B.
-        if (Key == KEY_2) {
+        // Menu navigation: UP/DOWN to select (keypad 2/8 also supported).
+        if (Key == KEY_UP || Key == KEY_2) {
             gArduboySelected--;
             if (gArduboySelected < 0) {
                 gArduboySelected = gArduboyGameCount - 1;
@@ -450,7 +453,7 @@ void ARDUBOY_ProcessKeys(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
             gUpdateDisplay = true;
             return;
         }
-        if (Key == KEY_8) {
+        if (Key == KEY_DOWN || Key == KEY_8) {
             gArduboySelected++;
             if (gArduboySelected >= gArduboyGameCount) {
                 gArduboySelected = 0;
@@ -458,8 +461,8 @@ void ARDUBOY_ProcessKeys(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
             gUpdateDisplay = true;
             return;
         }
-        // Start game with A (UP key) or the usual confirm keys.
-        if (Key == KEY_UP || Key == KEY_MENU || Key == KEY_SIDE1 || Key == KEY_PTT) {
+        // Confirm with MENU.
+        if (Key == KEY_MENU) {
             ArduboyStartGame(gArduboySelected);
             return;
         }
@@ -490,17 +493,82 @@ void ARDUBOY_ProcessKeys(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
 }
 
 static void ArduboyRenderMenu(void) {
-    memset(gStatusLine, 0, sizeof(gStatusLine));
     UI_DisplayClear();
-    UI_PrintStringSmall("Arduboy2", 0, 127, 0);
 
-    for (int i = 0; i < gArduboyGameCount && i < 5; ++i) {
-        char line[16];
-        snprintf(line, sizeof(line), "%c%s", (i == gArduboySelected) ? '>' : ' ', gArduboyGames[i].name);
-        UI_PrintStringSmall(line, 0, 127, static_cast<uint8_t>(i + 1));
+    const int total = gArduboyGameCount;
+    const int window = 7;
+    int start = 0;
+    if (total > window) {
+        start = gArduboySelected - window / 2;
+        if (start < 0) {
+            start = 0;
+        }
+        if (start > total - window) {
+            start = total - window;
+        }
     }
 
-    UI_PrintStringSmall("EXIT=BACK", 0, 127, 6);
+    const int lines = (total < window) ? total : window;
+    const bool has_prev = (start > 0);
+    const bool has_next = (start + lines < total);
+
+    // Title bar: label + page arrows + battery.
+    memset(gStatusLine, 0, sizeof(gStatusLine));
+    UI_PrintStringSmallBuffer("ARDUBOY2", gStatusLine);
+
+#ifdef ENABLE_PINYIN
+    {
+        uint8_t x = static_cast<uint8_t>(LCD_WIDTH - sizeof(BITMAP_BatteryLevel1));
+        if (has_next) {
+            x = static_cast<uint8_t>(x - sizeof(BITMAP_ARRAY_DOWN));
+            memcpy(gStatusLine + x, BITMAP_ARRAY_DOWN, sizeof(BITMAP_ARRAY_DOWN));
+        }
+        if (has_prev) {
+            x = static_cast<uint8_t>(x - sizeof(BITMAP_ARRAY_UP));
+            memcpy(gStatusLine + x, BITMAP_ARRAY_UP, sizeof(BITMAP_ARRAY_UP));
+        }
+    }
+#else
+    if (has_prev) {
+        UI_PrintStringSmallBuffer("^", gStatusLine + (LCD_WIDTH - sizeof(BITMAP_BatteryLevel1) - 12));
+    }
+    if (has_next) {
+        UI_PrintStringSmallBuffer("v", gStatusLine + (LCD_WIDTH - sizeof(BITMAP_BatteryLevel1) - 6));
+    }
+#endif
+
+    {
+        char s[8] = "";
+        const unsigned int x_bat = LCD_WIDTH - sizeof(BITMAP_BatteryLevel1);
+        unsigned int x_end = x_bat;
+#ifndef ENABLE_PINYIN
+        if (has_prev) x_end = x_bat - 12;
+        else if (has_next) x_end = x_bat - 6;
+#else
+        if (has_prev || has_next) x_end = x_bat - (has_prev ? sizeof(BITMAP_ARRAY_UP) : 0) - (has_next ? sizeof(BITMAP_ARRAY_DOWN) : 0);
+#endif
+
+        sprintf(s, "%u%%", BATTERY_VoltsToPercent(gBatteryVoltageAverage));
+        const unsigned int space_needed = 7U * strlen(s);
+        const unsigned int title_end = 7U * 8U; // "ARDUBOY2"
+        if (x_end >= (title_end + space_needed)) {
+            UI_PrintStringSmallBuffer(s, gStatusLine + (x_end - space_needed));
+        }
+    }
+
+    UI_DrawBattery(gStatusLine + (LCD_WIDTH - sizeof(BITMAP_BatteryLevel1)), gBatteryDisplayLevel, gLowBatteryBlink);
+
+    for (int i = 0; i < lines; ++i) {
+        const int index = start + i;
+        UI_PrintStringSmall(gArduboyGames[index].name, 0, 127, static_cast<uint8_t>(i));
+        if (index == gArduboySelected) {
+            const uint8_t row = static_cast<uint8_t>(i);
+            for (uint8_t x = 0; x < LCD_WIDTH; ++x) {
+                gFrameBuffer[row][x] ^= 0xFF;
+            }
+        }
+    }
+
     ST7565_BlitStatusLine();
     ST7565_BlitFullScreen();
 }

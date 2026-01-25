@@ -60,6 +60,14 @@ static uint8_t gRtcMenuField = 0; // 0:Y,1:M,2:D,3:h,4:m,5:s
 static bool gRtcMenuEditing = false;
 static pcf8563_time_t gRtcMenuTime;
 
+static uint8_t gLocMenuField = 0; // 0:lat,1:lon,2:height
+static bool gLocMenuEditing = false;
+static menu_location_t gLocMenuLocation;
+static bool gLocMenuInputActive = false;
+static uint8_t gLocMenuInputIndex = 0;
+static bool gLocMenuDotUsed = false;
+static char gLocMenuInput[20];
+
 uint8_t MENU_RTC_GetField(void)
 {
     return gRtcMenuField;
@@ -77,6 +85,109 @@ bool MENU_RTC_GetDisplayTime(pcf8563_time_t *t)
     }
 
     return PCF8563_ReadTime(t);
+}
+
+uint8_t MENU_LOC_GetField(void)
+{
+    return gLocMenuField;
+}
+
+static void LOC_Load(menu_location_t *loc)
+{
+    if (!loc) return;
+
+    EEPROM_ReadBuffer(0x2BB0, (uint8_t *)loc, 24);
+
+    if (!(loc->lat >= -90.0 && loc->lat <= 90.0)) loc->lat = 85.0;
+    if (!(loc->lon >= -180.0 && loc->lon <= 180.0)) loc->lon = 130.0;
+    if (!(loc->height >= -999999.0 && loc->height <= 999999.0)) loc->height = 20.0;
+}
+
+static void LOC_Save(const menu_location_t *loc)
+{
+    if (!loc) return;
+
+    if (loc->lat >= -90.0 && loc->lat <= 90.0) {
+        EEPROM_WriteBuffer(0x2BB0, (uint8_t *)&loc->lat, 8);
+    }
+    if (loc->lon >= -180.0 && loc->lon <= 180.0) {
+        EEPROM_WriteBuffer(0x2BB0 + 8, (uint8_t *)&loc->lon, 8);
+    }
+    if (loc->height >= -999999.0 && loc->height <= 999999.0) {
+        EEPROM_WriteBuffer(0x2BB0 + 16, (uint8_t *)&loc->height, 8);
+    }
+}
+
+bool MENU_LOC_GetDisplay(menu_location_t *loc)
+{
+    if (!loc) {
+        return false;
+    }
+
+    if (gLocMenuEditing && UI_MENU_GetCurrentMenuId() == MENU_LOC) {
+        *loc = gLocMenuLocation;
+        return true;
+    }
+
+    LOC_Load(loc);
+    return true;
+}
+
+const char *MENU_LOC_GetInput(void)
+{
+    if (gLocMenuEditing && UI_MENU_GetCurrentMenuId() == MENU_LOC && gLocMenuInputActive) {
+        return gLocMenuInput;
+    }
+    return NULL;
+}
+
+static void LOC_InputReset(void)
+{
+    gLocMenuInputActive = false;
+    gLocMenuInputIndex = 0;
+    gLocMenuDotUsed = false;
+    gLocMenuInput[0] = '\0';
+}
+
+static void LOC_InputStartIfNeeded(void)
+{
+    if (!gLocMenuInputActive) {
+        LOC_InputReset();
+        gLocMenuInputActive = true;
+    }
+}
+
+static bool LOC_CommitInputIfActive(void)
+{
+    if (!gLocMenuInputActive) {
+        return true;
+    }
+
+    gLocMenuInput[gLocMenuInputIndex] = '\0';
+
+    char *endptr = NULL;
+    const double v = strtod(gLocMenuInput, &endptr);
+    if (endptr == gLocMenuInput) {
+        return false;
+    }
+
+    switch (gLocMenuField) {
+        case 0: // lat
+            if (v < -90.0 || v > 90.0) return false;
+            gLocMenuLocation.lat = v;
+            break;
+        case 1: // lon
+            if (v < -180.0 || v > 180.0) return false;
+            gLocMenuLocation.lon = v;
+            break;
+        default: // height
+            if (v < -999999.0 || v > 999999.0) return false;
+            gLocMenuLocation.height = v;
+            break;
+    }
+
+    LOC_InputReset();
+    return true;
 }
 
 static inline bool RTC_IsLeapYear(uint16_t y)
@@ -1360,6 +1471,18 @@ static void MENU_Key_0_to_9(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
 
     gBeepToPlay = BEEP_1KHZ_60MS_OPTIONAL;
     uint8_t now_menu = UI_MENU_GetCurrentMenuId();
+
+    if (now_menu == MENU_LOC && gIsInSubMenu) {
+        LOC_InputStartIfNeeded();
+        if (gLocMenuInputIndex + 1 >= sizeof(gLocMenuInput)) {
+            gBeepToPlay = BEEP_500HZ_60MS_DOUBLE_BEEP_OPTIONAL;
+            return;
+        }
+        gLocMenuInput[gLocMenuInputIndex++] = (char)('0' + (Key - KEY_0));
+        gLocMenuInput[gLocMenuInputIndex] = '\0';
+        gRequestDisplayScreen = DISPLAY_MENU;
+        return;
+    }
 #ifdef ENABLE_MDC1200_EDIT //���뷨����
     uint8_t end_index = now_menu == MENU_MEM_NAME ? MAX_EDIT_INDEX : 4;
 #else
@@ -1601,6 +1724,33 @@ static void MENU_Key_EXIT(bool bKeyPressed, bool bKeyHeld) {
     if (bKeyHeld || !bKeyPressed)
         return;
 
+    if (UI_MENU_GetCurrentMenuId() == MENU_LOC && gIsInSubMenu) {
+        // While typing a value, EXIT behaves like backspace/cancel-input.
+        if (gLocMenuInputActive) {
+            if (gLocMenuInputIndex > 0) {
+                const char removed = gLocMenuInput[gLocMenuInputIndex - 1];
+                gLocMenuInputIndex--;
+                gLocMenuInput[gLocMenuInputIndex] = '\0';
+                if (removed == '.') {
+                    gLocMenuDotUsed = false;
+                }
+            } else {
+                LOC_InputReset();
+            }
+            gRequestDisplayScreen = DISPLAY_MENU;
+            return;
+        }
+
+        // Cancel LOC edit (discard changes) and stay in menu.
+        gLocMenuField = 0;
+        gLocMenuEditing = false;
+        LOC_InputReset();
+        gIsInSubMenu = false;
+        gFlagRefreshSetting = true;
+        gRequestDisplayScreen = DISPLAY_MENU;
+        return;
+    }
+
     if (UI_MENU_GetCurrentMenuId() == MENU_RTC && gIsInSubMenu) {
         // Cancel RTC edit (discard changes) and stay in menu.
         gRtcMenuField = 0;
@@ -1828,6 +1978,16 @@ static void MENU_Key_MENU(const bool bKeyPressed, const bool bKeyHeld) {
             return;
         }
 
+        if (UI_MENU_GetCurrentMenuId() == MENU_LOC) {
+            // Enter LOC edit mode: load once into the editable copy.
+            LOC_Load(&gLocMenuLocation);
+            gLocMenuField = 0;
+            gLocMenuEditing = true;
+            LOC_InputReset();
+            gRequestDisplayScreen = DISPLAY_MENU;
+            return;
+        }
+
 //		if (UI_MENU_GetCurrentMenuId() != MENU_D_LIST)
         {
             gInputBoxIndex = 0;
@@ -1858,6 +2018,31 @@ static void MENU_Key_MENU(const bool bKeyPressed, const bool bKeyHeld) {
 
         gRtcMenuField = 0;
         gRtcMenuEditing = false;
+        gIsInSubMenu = false;
+        gFlagRefreshSetting = true;
+        gRequestDisplayScreen = DISPLAY_MENU;
+        return;
+    }
+
+    if (gIsInSubMenu && UI_MENU_GetCurrentMenuId() == MENU_LOC) {
+        // MENU commits current input (if any) and cycles field; after height, save and exit.
+        if (!LOC_CommitInputIfActive()) {
+            gBeepToPlay = BEEP_500HZ_60MS_DOUBLE_BEEP_OPTIONAL;
+            return;
+        }
+
+        if (gLocMenuField < 2) {
+            gLocMenuField++;
+            gRequestDisplayScreen = DISPLAY_MENU;
+            return;
+        }
+
+        // Commit edited location once.
+        LOC_Save(&gLocMenuLocation);
+
+        gLocMenuField = 0;
+        gLocMenuEditing = false;
+        LOC_InputReset();
         gIsInSubMenu = false;
         gFlagRefreshSetting = true;
         gRequestDisplayScreen = DISPLAY_MENU;
@@ -1992,6 +2177,22 @@ static void MENU_Key_STAR(const bool bKeyPressed, const bool bKeyHeld) {
         return;
 
     gBeepToPlay = BEEP_1KHZ_60MS_OPTIONAL;
+
+    if (UI_MENU_GetCurrentMenuId() == MENU_LOC && gIsInSubMenu) {
+        if (!gLocMenuInputActive || gLocMenuInputIndex == 0 || gLocMenuDotUsed) {
+            gBeepToPlay = BEEP_500HZ_60MS_DOUBLE_BEEP_OPTIONAL;
+            return;
+        }
+        if (gLocMenuInputIndex + 1 >= sizeof(gLocMenuInput)) {
+            gBeepToPlay = BEEP_500HZ_60MS_DOUBLE_BEEP_OPTIONAL;
+            return;
+        }
+        gLocMenuInput[gLocMenuInputIndex++] = '.';
+        gLocMenuInput[gLocMenuInputIndex] = '\0';
+        gLocMenuDotUsed = true;
+        gRequestDisplayScreen = DISPLAY_MENU;
+        return;
+    }
 //���뷨��ģʽ�л�
     if (UI_MENU_GetCurrentMenuId() == MENU_MEM_NAME && edit_index >= 0) {    // currently editing the channel name
 
@@ -2048,6 +2249,26 @@ static void MENU_Key_UP_DOWN(bool bKeyPressed, bool bKeyHeld, int8_t Direction) 
     uint8_t VFO;
     uint8_t Channel;
     bool bCheckScanList;
+
+    if (UI_MENU_GetCurrentMenuId() == MENU_LOC && gIsInSubMenu) {
+        if (bKeyHeld || !bKeyPressed) {
+            return;
+        }
+        if (gLocMenuInputActive) {
+            return;
+        }
+
+        if (Direction == 1) {
+            // UP
+            gLocMenuField = (gLocMenuField == 0) ? 2 : (uint8_t)(gLocMenuField - 1);
+        } else {
+            // DOWN
+            gLocMenuField = (uint8_t)((gLocMenuField + 1) % 3);
+        }
+        gRequestDisplayScreen = DISPLAY_MENU;
+        return;
+    }
+
     if (gIsInSubMenu && edit_index >= 0) { //���뷨UP DOWN
         if (UI_MENU_GetCurrentMenuId() == MENU_MEM_NAME) {    // change the character
 
@@ -2305,6 +2526,34 @@ void MENU_ProcessKeys(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
             MENU_Key_STAR(bKeyPressed, bKeyHeld);
             break;
         case KEY_F:
+            if (UI_MENU_GetCurrentMenuId() == MENU_LOC && gIsInSubMenu) {
+                if (!bKeyHeld && bKeyPressed) {
+                    gBeepToPlay = BEEP_1KHZ_60MS_OPTIONAL;
+                    LOC_InputStartIfNeeded();
+
+                    // Toggle leading minus.
+                    if (gLocMenuInputIndex == 0) {
+                        if (gLocMenuInputIndex + 1 >= sizeof(gLocMenuInput)) {
+                            gBeepToPlay = BEEP_500HZ_60MS_DOUBLE_BEEP_OPTIONAL;
+                            break;
+                        }
+                        gLocMenuInput[gLocMenuInputIndex++] = '-';
+                        gLocMenuInput[gLocMenuInputIndex] = '\0';
+                        gRequestDisplayScreen = DISPLAY_MENU;
+                        break;
+                    }
+                    if (gLocMenuInputIndex == 1 && gLocMenuInput[0] == '-') {
+                        LOC_InputReset();
+                        gLocMenuInputActive = true;
+                        gRequestDisplayScreen = DISPLAY_MENU;
+                        break;
+                    }
+
+                    gBeepToPlay = BEEP_500HZ_60MS_DOUBLE_BEEP_OPTIONAL;
+                }
+                break;
+            }
+
             if (UI_MENU_GetCurrentMenuId() == MENU_MEM_NAME && //���뷨
                 edit_index >= 0) {    // currently editing the channel name
                 if (!bKeyHeld && bKeyPressed) {

@@ -47,6 +47,23 @@ uint8_t MENU_RTC_GetField(void);
 // When editing, this is the in-memory editable copy; otherwise it reads from RTC.
 bool MENU_RTC_GetDisplayTime(pcf8563_time_t *t);
 
+typedef struct {
+    double lat;
+    double lon;
+    double height;
+} menu_location_t;
+
+// Location menu helper: returns selected field (0:lat,1:lon,2:height) when editing.
+uint8_t MENU_LOC_GetField(void);
+
+// Location menu helper: returns the location that should be displayed for LOC menu.
+// When editing, this is the in-memory editable copy; otherwise it reads from EEPROM.
+bool MENU_LOC_GetDisplay(menu_location_t *loc);
+
+// Location menu helper: returns the current input buffer (only when editing and typing),
+// or NULL when not actively entering a value.
+const char *MENU_LOC_GetInput(void);
+
 
 #endif
 
