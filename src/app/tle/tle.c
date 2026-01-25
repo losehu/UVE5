@@ -110,6 +110,26 @@ look_result look;
 lat_lon sub_point;
 lat_lon observer = {-0.1234567890123456789, 5.1234567890123456789, -50.1234567890123456789};
 uint8_t now_menu = 1;
+static volatile bool gTleExitRequested = false;
+
+static void TLE_RequestExitToMain(void)
+{
+    // Best-effort cleanup to avoid leaving TX on.
+    if (isTransmitting) {
+        ToggleTX(false);
+    }
+    isTransmitting = false;
+    monitorMode = false;
+    lockAGC = false;
+    menuState = 0;
+
+    gRequestDisplayScreen = DISPLAY_MAIN;
+    GUI_SelectNextDisplay(DISPLAY_MAIN);
+    gUpdateDisplay = true;
+    gUpdateStatus = true;
+
+    gTleExitRequested = true;
+}
 
 static inline void DrawPoint(int x, int y)
 {
@@ -1243,6 +1263,10 @@ void SELECT_KEY() {
         case KEY_MENU:
             switch_mode = 1;
             break;
+        case KEY_EXIT:
+            // Exit TLE app back to main UI.
+            TLE_RequestExitToMain();
+            break;
     }
 }
 
@@ -1557,6 +1581,7 @@ void TLE_Main() {
         }
     }
 
+    gTleExitRequested = false;
     while (1) {
 #ifdef ENABLE_RTC
         DS3231Handler();
@@ -1569,9 +1594,17 @@ void TLE_Main() {
 #endif
         my_kbd.current = KEYBOARD_Poll();
         TLE_KEY();
+        if (gTleExitRequested) {
+            break;
+        }
         TLE_PROCESS();
         TLE_UI();
         UART_READ();
+        SYSTEM_DelayMs(10);
+    }
+
+    // Avoid letting the main UI see the same EXIT press.
+    while (KEYBOARD_Poll() == KEY_EXIT) {
         SYSTEM_DelayMs(10);
     }
 }
