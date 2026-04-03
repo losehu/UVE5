@@ -19,6 +19,7 @@
 #include "scheduler.h"
 #include "settings.h"
 #include "ui/ui.h"
+#include "ui/menu.h"
 #include "ui/welcome.h"
 
 #ifdef ENABLE_AM_FIX
@@ -68,6 +69,9 @@ void setup() {
     gMenuListCount = 54;
 #else
     gMenuListCount = 55;
+#endif
+#if ENABLE_MENU_TEST_MODE
+    gMenuListCount += 1;
 #endif
 
     gKeyReading0 = KEY_INVALID;

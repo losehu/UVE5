@@ -24,6 +24,10 @@
 #include "settings.h"
 #include "font.h"
 
+#ifndef ENABLE_MENU_TEST_MODE
+#define ENABLE_MENU_TEST_MODE 1
+#endif
+
 typedef struct {
     VOICE_ID_t voice_id;
     uint8_t menu_id;
@@ -144,6 +148,9 @@ enum {
 	MENU_BATTYP
 	, MENU_RTC
     , MENU_LOC
+#if ENABLE_MENU_TEST_MODE
+    , MENU_TEST_MODE
+#endif
 };
 
 extern const t_menu_item MenuList[];

@@ -138,6 +138,87 @@ static void RunHardwareTestMode(void) {
     // }
 }
 #endif
+
+#ifndef ENABLE_EEPROM_TEST
+#define ENABLE_EEPROM_TEST 1
+#endif
+
+#if ENABLE_EEPROM_TEST
+static void EepromTestDumpHex(const uint8_t *buf, uint8_t size) {
+    for (uint8_t i = 0; i < size; ++i) {
+        Serial.printf("%02X", buf[i]);
+        if (i + 1U < size) {
+            Serial.print(' ');
+        }
+    }
+    Serial.println();
+}
+
+static void RunEepromTest(void) {
+    Serial.println("[EEPROM_TEST] start");
+
+    static constexpr uint32_t kStart = 0x0000U;
+    static constexpr uint32_t kEnd = 0x2000U;
+    static constexpr uint32_t kStep = 0x0400U; // every 1KB
+    static constexpr uint8_t kSize = 16U;
+
+    uint32_t passCount = 0U;
+    uint32_t failCount = 0U;
+
+    for (uint32_t addr = kStart; addr <= kEnd; addr += kStep) {
+        uint8_t before[kSize] = {0};
+        uint8_t test[kSize] = {0};
+        uint8_t after[kSize] = {0};
+        uint8_t restore[kSize] = {0};
+
+        const bool probe = EEPROM_Probe(addr);
+        EEPROM_ReadBuffer(addr, before, kSize);
+
+        for (uint8_t i = 0; i < kSize; ++i) {
+            test[i] = (uint8_t)(0x5AU ^ (uint8_t)(addr >> 2) ^ (uint8_t)(i * 13U));
+        }
+
+        EEPROM_WriteBuffer(addr, test, kSize);
+        EEPROM_ReadBuffer(addr, after, kSize);
+
+        const bool writeReadOk = (memcmp(test, after, kSize) == 0);
+
+        EEPROM_WriteBuffer(addr, before, kSize);
+        EEPROM_ReadBuffer(addr, restore, kSize);
+        const bool restoreOk = (memcmp(before, restore, kSize) == 0);
+
+        const bool ok = writeReadOk && restoreOk;
+        if (ok) {
+            ++passCount;
+        } else {
+            ++failCount;
+        }
+
+        Serial.printf("[EEPROM_TEST] addr=0x%04lX probe=%d wr=%d restore=%d\n",
+                      (unsigned long)addr,
+                      probe ? 1 : 0,
+                      writeReadOk ? 1 : 0,
+                      restoreOk ? 1 : 0);
+
+        if (!ok) {
+            Serial.print("[EEPROM_TEST]   before : ");
+            EepromTestDumpHex(before, kSize);
+            Serial.print("[EEPROM_TEST]   test   : ");
+            EepromTestDumpHex(test, kSize);
+            Serial.print("[EEPROM_TEST]   after  : ");
+            EepromTestDumpHex(after, kSize);
+            Serial.print("[EEPROM_TEST]   restore: ");
+            EepromTestDumpHex(restore, kSize);
+        }
+    }
+
+    Serial.printf("[EEPROM_TEST] summary pass=%lu fail=%lu\n",
+                  (unsigned long)passCount,
+                  (unsigned long)failCount);
+    Serial.println("[EEPROM_TEST] done");
+}
+#endif
+
 #if !defined(ENABLE_OPENCV)
 #include "assets/ckx_8lvl_128x64.h"
 #endif
@@ -586,8 +667,12 @@ void setup() {
 #endif
   BOARD_Init();
   delay(2000);
-  pinMode(41, OUTPUT);
-  digitalWrite(41, HIGH); // Enable 5V for peripherals
+#if ENABLE_EEPROM_TEST
+  RunEepromTest();
+#endif
+  if (!ES8311_SetReceiveMode()) {
+      Serial.println("ES8311 set receive mode failed.");
+  }
   SCHEDULER_Init();
 
 
@@ -629,6 +714,9 @@ void setup() {
     gMenuListCount = 54;
 #else
     gMenuListCount = 55;
+#endif
+#if ENABLE_MENU_TEST_MODE
+    gMenuListCount += 1;
 #endif
     gKeyReading0 = KEY_INVALID;
     gKeyReading1 = KEY_INVALID;

@@ -36,6 +36,7 @@
 #endif
 
 #include "driver/bk4819.h"
+#include "driver/es8311.h"
 #include "driver/system.h"
 #include "driver/st7565.h"
 #include "frequencies.h"
@@ -94,6 +95,8 @@ void FUNCTION_Init(void)
     gUpdateStatus = true;
 }
 void FUNCTION_Foreground(const FUNCTION_Type_t PreviousFunction) {
+    ES8311_SetReceiveMode();
+
 #ifdef ENABLE_DTMF_CALLING
     if (gDTMF_ReplyState != DTMF_REPLY_NONE)
         RADIO_PrepareCssTX();
@@ -123,6 +126,8 @@ void FUNCTION_Foreground(const FUNCTION_Type_t PreviousFunction) {
 }
 
 void FUNCTION_PowerSave() {
+    ES8311_SetReceiveMode();
+
     gPowerSave_10ms = gEeprom.BATTERY_SAVE * 10;
     gPowerSaveCountdownExpired = false;
 
@@ -192,6 +197,7 @@ void FUNCTION_Transmit() {
 
     GUI_DisplayScreen();
 
+    ES8311_SetTransmitMode();
     RADIO_SetTxParameters();
 
     // turn the RED LED on
@@ -283,11 +289,14 @@ void FUNCTION_Select(FUNCTION_Type_t Function) {
             break;
 
         case FUNCTION_MONITOR:
+            ES8311_SetReceiveMode();
             gMonitor = true;
             break;
 
         case FUNCTION_INCOMING:
         case FUNCTION_RECEIVE:
+            ES8311_SetReceiveMode();
+            break;
         case FUNCTION_BAND_SCOPE:
         default:
             break;

@@ -20,6 +20,10 @@
 #include "../driver/keyboard.h"
 #include "../driver/pcf8563.h"
 
+#ifndef ENABLE_MENU_TEST_MODE
+#define ENABLE_MENU_TEST_MODE 1
+#endif
+
 #ifdef ENABLE_F_CAL_MENU
 void writeXtalFreqCal(const int32_t value, const bool update_eeprom);
 #endif
@@ -63,6 +67,10 @@ bool MENU_LOC_GetDisplay(menu_location_t *loc);
 // Location menu helper: returns the current input buffer (only when editing and typing),
 // or NULL when not actively entering a value.
 const char *MENU_LOC_GetInput(void);
+
+#if ENABLE_MENU_TEST_MODE
+const char *MENU_TEST_GetStatusText(void);
+#endif
 
 
 #endif

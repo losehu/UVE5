@@ -156,6 +156,10 @@ const t_menu_item MenuList[] =
                                STR_LOC},
                 {/*"Reset",*/  VOICE_ID_INITIALISATION, MENU_RESET,
                                STR_RESET}, // might be better to move this to the hidden menu items ?
+#if ENABLE_MENU_TEST_MODE
+                {/*"Test",*/   VOICE_ID_INVALID, MENU_TEST_MODE,
+                               "TEST"},
+#endif
 
                 {/*"",*/       VOICE_ID_INVALID, 0xff, "\x00"}  // end of list - DO NOT delete or move this this
         };
@@ -1369,6 +1373,19 @@ void UI_DisplayMenu(void) {
 
 
             break;
+
+#if ENABLE_MENU_TEST_MODE
+        case MENU_TEST_MODE: {
+            const char *status = MENU_TEST_GetStatusText();
+            if (status && status[0] != '\0') {
+                strncpy(String, status, sizeof(String) - 1U);
+                String[sizeof(String) - 1U] = '\0';
+            } else {
+                strcpy(String, "MENU: START");
+            }
+            break;
+        }
+#endif
 
         case MENU_RTC: {
             pcf8563_time_t t;

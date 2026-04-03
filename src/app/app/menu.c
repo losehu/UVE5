@@ -39,6 +39,7 @@
 #include "../misc.h"
 #include "../pinyin_blob.h"
 #include "../settings.h"
+#include "../driver/es8311.h"
 #include "ime.h"
 
 #include "../driver/pcf8563.h"
@@ -67,6 +68,152 @@ static bool gLocMenuInputActive = false;
 static uint8_t gLocMenuInputIndex = 0;
 static bool gLocMenuDotUsed = false;
 static char gLocMenuInput[20];
+
+#if ENABLE_MENU_TEST_MODE
+typedef enum {
+    MENU_TEST_STAGE_IDLE = 0,
+    MENU_TEST_STAGE_EEPROM_DONE,
+    MENU_TEST_STAGE_DTMF_DONE,
+    MENU_TEST_STAGE_VOICE_WAIT_START,
+    MENU_TEST_STAGE_FINISHED,
+} menu_test_stage_t;
+
+static menu_test_stage_t gMenuTestStage = MENU_TEST_STAGE_IDLE;
+static char gMenuTestStatusText[64] = "MENU: START\nEEPROM TEST\n";
+
+static void MENU_TEST_SetStatus(const char *line1, const char *line2, const char *line3)
+{
+    snprintf(gMenuTestStatusText,
+             sizeof(gMenuTestStatusText),
+             "%s\n%s\n%s",
+             line1 ? line1 : "",
+             line2 ? line2 : "",
+             line3 ? line3 : "");
+}
+
+static void MENU_TEST_ResetState(void)
+{
+    gMenuTestStage = MENU_TEST_STAGE_IDLE;
+    MENU_TEST_SetStatus("MENU: START", "EEPROM TEST", "");
+}
+
+const char *MENU_TEST_GetStatusText(void)
+{
+    return gMenuTestStatusText;
+}
+
+static void MENU_TEST_RunEeprom(void)
+{
+    MENU_TEST_SetStatus("EEPROM TEST", "RUNNING...", "");
+    UI_DisplayMenu();
+
+    enum {
+        MENU_TEST_EEPROM_START = 0x0000U,
+        MENU_TEST_EEPROM_END_EXCLUSIVE = 0x2000U,
+        MENU_TEST_EEPROM_STEP = 0x0400U, // every 1KB
+        MENU_TEST_EEPROM_SIZE = 16U
+    };
+
+    uint32_t passCount = 0U;
+    uint32_t failCount = 0U;
+    uint32_t firstFailAddr = 0xFFFFFFFFU;
+
+    for (uint32_t addr = MENU_TEST_EEPROM_START;
+         addr < MENU_TEST_EEPROM_END_EXCLUSIVE;
+         addr += MENU_TEST_EEPROM_STEP) {
+        uint8_t before[MENU_TEST_EEPROM_SIZE] = {0};
+        uint8_t pattern[MENU_TEST_EEPROM_SIZE] = {0};
+        uint8_t after[MENU_TEST_EEPROM_SIZE] = {0};
+        uint8_t restore[MENU_TEST_EEPROM_SIZE] = {0};
+
+        const bool probe = EEPROM_Probe(addr);
+        EEPROM_ReadBuffer(addr, before, MENU_TEST_EEPROM_SIZE);
+
+        for (uint8_t i = 0; i < MENU_TEST_EEPROM_SIZE; ++i) {
+            pattern[i] = (uint8_t)(0x5AU ^ (uint8_t)(addr >> 2) ^ (uint8_t)(i * 13U));
+        }
+
+        EEPROM_WriteBuffer(addr, pattern, MENU_TEST_EEPROM_SIZE);
+        EEPROM_ReadBuffer(addr, after, MENU_TEST_EEPROM_SIZE);
+        const bool writeReadOk = (memcmp(pattern, after, MENU_TEST_EEPROM_SIZE) == 0);
+
+        EEPROM_WriteBuffer(addr, before, MENU_TEST_EEPROM_SIZE);
+        EEPROM_ReadBuffer(addr, restore, MENU_TEST_EEPROM_SIZE);
+        const bool restoreOk = (memcmp(before, restore, MENU_TEST_EEPROM_SIZE) == 0);
+
+        const bool ok = probe && writeReadOk && restoreOk;
+        if (ok) {
+            ++passCount;
+        } else {
+            ++failCount;
+            if (firstFailAddr == 0xFFFFFFFFU) {
+                firstFailAddr = addr;
+            }
+        }
+    }
+
+    char line1[24];
+    char line2[24];
+    if (failCount == 0U) {
+        snprintf(line1, sizeof(line1), "EEPROM PASS %lu", (unsigned long)passCount);
+        snprintf(line2, sizeof(line2), "MENU: DTMF");
+    } else {
+        snprintf(line1, sizeof(line1), "EEPROM FAIL %lu", (unsigned long)failCount);
+        snprintf(line2, sizeof(line2), "BAD:0x%04lX", (unsigned long)firstFailAddr);
+    }
+
+    MENU_TEST_SetStatus(line1, line2, "MENU: NEXT");
+    gMenuTestStage = MENU_TEST_STAGE_EEPROM_DONE;
+    gRequestDisplayScreen = DISPLAY_MENU;
+}
+
+static void MENU_TEST_RunDtmf(void)
+{
+    MENU_TEST_SetStatus("DTMF 0-9", "PLAYING...", "");
+    UI_DisplayMenu();
+
+    AUDIO_AudioPathOn();
+    gEnableSpeaker = true;
+
+    BK4819_EnterDTMF_TX(true);
+    BK4819_PlayDTMFString("0123456789", false, 120, 120, 120, 80);
+    BK4819_ExitDTMF_TX(false);
+
+    AUDIO_AudioPathOff();
+    gEnableSpeaker = false;
+
+    MENU_TEST_SetStatus("DTMF DONE", "MENU: VOICE", "NEXT");
+    gMenuTestStage = MENU_TEST_STAGE_DTMF_DONE;
+    gRequestDisplayScreen = DISPLAY_MENU;
+}
+
+static void MENU_TEST_ArmVoice(void)
+{
+    MENU_TEST_SetStatus("VOICE TEST", "MENU: START 3S", "SPEAK");
+    gMenuTestStage = MENU_TEST_STAGE_VOICE_WAIT_START;
+    gRequestDisplayScreen = DISPLAY_MENU;
+}
+
+static void MENU_TEST_RunVoiceRecordPlayback(void)
+{
+    MENU_TEST_SetStatus("VOICE TEST", "RECORD/PLAY...", "");
+    UI_DisplayMenu();
+
+    AUDIO_AudioPathOn();
+    gEnableSpeaker = true;
+    const bool ok = ES8311_RecordMicAndPlayback(3000U);
+    AUDIO_AudioPathOff();
+    gEnableSpeaker = false;
+
+    if (ok) {
+        MENU_TEST_SetStatus("VOICE DONE", "MENU/EXIT END", "");
+    } else {
+        MENU_TEST_SetStatus("VOICE FAIL", "MENU/EXIT END", "");
+    }
+    gMenuTestStage = MENU_TEST_STAGE_FINISHED;
+    gRequestDisplayScreen = DISPLAY_MENU;
+}
+#endif
 
 uint8_t MENU_RTC_GetField(void)
 {
@@ -1124,6 +1271,15 @@ void MENU_ShowCurrentSetting(void) {
             gSubMenuSelection = 0;
             break;
 
+#if ENABLE_MENU_TEST_MODE
+        case MENU_TEST_MODE:
+            gSubMenuSelection = 0;
+            if (!gIsInSubMenu) {
+                MENU_TEST_ResetState();
+            }
+            break;
+#endif
+
         case MENU_R_DCS:
         case MENU_R_CTCS: {
             DCS_CodeType_t type = gTxVfo->freq_config_RX.CodeType;
@@ -1760,6 +1916,17 @@ static void MENU_Key_EXIT(bool bKeyPressed, bool bKeyHeld) {
         gRequestDisplayScreen = DISPLAY_MENU;
         return;
     }
+
+#if ENABLE_MENU_TEST_MODE
+    if (UI_MENU_GetCurrentMenuId() == MENU_TEST_MODE && gIsInSubMenu) {
+        gBeepToPlay = BEEP_1KHZ_60MS_OPTIONAL;
+        MENU_TEST_ResetState();
+        gIsInSubMenu = false;
+        gFlagRefreshSetting = true;
+        gRequestDisplayScreen = DISPLAY_MENU;
+        return;
+    }
+#endif
     if (UI_MENU_GetCurrentMenuId() == MENU_MEM_NAME && gIsInSubMenu == true && edit_index >= 0&&gAskForConfirmation == 0) {
 #ifdef ENABLE_PINYIN
         if (INPUT_MODE == 0) {
@@ -1924,6 +2091,41 @@ static void MENU_Key_MENU(const bool bKeyPressed, const bool bKeyHeld) {
     }
 
 #endif
+
+#if ENABLE_MENU_TEST_MODE
+    if (UI_MENU_GetCurrentMenuId() == MENU_TEST_MODE) {
+        if (!gIsInSubMenu) {
+            gAskForConfirmation = 0;
+            gInputBoxIndex = 0;
+            gIsInSubMenu = true;
+            MENU_TEST_RunEeprom();
+            return;
+        }
+
+        switch (gMenuTestStage) {
+            case MENU_TEST_STAGE_IDLE:
+                MENU_TEST_RunEeprom();
+                return;
+            case MENU_TEST_STAGE_EEPROM_DONE:
+                MENU_TEST_RunDtmf();
+                return;
+            case MENU_TEST_STAGE_DTMF_DONE:
+                MENU_TEST_ArmVoice();
+                return;
+            case MENU_TEST_STAGE_VOICE_WAIT_START:
+                MENU_TEST_RunVoiceRecordPlayback();
+                return;
+            case MENU_TEST_STAGE_FINISHED:
+            default:
+                MENU_TEST_ResetState();
+                gIsInSubMenu = false;
+                gFlagRefreshSetting = true;
+                gRequestDisplayScreen = DISPLAY_MENU;
+                return;
+        }
+    }
+#endif
+
     if (!gIsInSubMenu) {
 #ifdef ENABLE_VOICE
         if (UI_MENU_GetCurrentMenuId() != MENU_SCR)

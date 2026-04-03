@@ -19,6 +19,18 @@
 #include <Arduino.h>
 #include <string.h>
 
+static constexpr uint32_t EEPROM_DIRECT_EEPROM_LIMIT = 0x2000U; // Use only first 8KB on real EEPROM.
+static constexpr uint32_t EEPROM_WRITE_READY_TIMEOUT_MS = 120U;
+static constexpr uint32_t EEPROM_READY_POLL_INTERVAL_US = 500U;
+static constexpr uint32_t EEPROM_POST_WRITE_DELAY_MS = 3U;
+
+static inline bool EEPROM_IsDirectEepromRange(uint32_t address, uint32_t size)
+{
+    return size > 0U &&
+           address < EEPROM_DIRECT_EEPROM_LIMIT &&
+           size <= (EEPROM_DIRECT_EEPROM_LIMIT - address);
+}
+
 #if defined(ARDUINO_ARCH_ESP32) && !defined(ENABLE_OPENCV)
 #include "../../lib/shared_flash.h"
 
@@ -191,7 +203,7 @@ static bool EEPROM_WaitReady(uint8_t controlByteWrite, uint32_t timeoutMs)
         if (ack == 0) {
             return true;
         }
-        delayMicroseconds(200);
+        delayMicroseconds(EEPROM_READY_POLL_INTERVAL_US);
     }
     return false;
 }
@@ -205,15 +217,29 @@ void EEPROM_Init(void) {
 
 void EEPROM_ReadBuffer(uint32_t Address, void *pBuffer, uint8_t Size) {
 
+    if (Size == 0U || pBuffer == nullptr) {
+        return;
+    }
+
 #if defined(ARDUINO_ARCH_ESP32) && !defined(ENABLE_OPENCV)
-    // User requirement: keep the first 8KB (0x0000..0x1FFF) on the real EEPROM.
-    const uint32_t kDirectEepromLimit = 0x2000U;
-    const bool directEepromWindow = (Address < kDirectEepromLimit) &&
-                                    ((uint32_t)Size <= (kDirectEepromLimit - Address));
+    const uint32_t requestSize = (uint32_t)Size;
+    const bool directEepromWindow = EEPROM_IsDirectEepromRange(Address, requestSize);
+
+    // Split cross-boundary accesses so [0x0000..0x1FFF] always stays on real EEPROM.
+    if (!directEepromWindow &&
+        Address < EEPROM_DIRECT_EEPROM_LIMIT &&
+        EEPROM_SharedLogicalSize() > 0U) {
+        const uint8_t firstChunk = (uint8_t)(EEPROM_DIRECT_EEPROM_LIMIT - Address);
+        EEPROM_ReadBuffer(Address, pBuffer, firstChunk);
+        EEPROM_ReadBuffer(EEPROM_DIRECT_EEPROM_LIMIT,
+                          (uint8_t *)pBuffer + firstChunk,
+                          (uint8_t)(Size - firstChunk));
+        return;
+    }
 
     if (!directEepromWindow && EEPROM_SharedLogicalSize() > 0U) {
         uint8_t *dst = (uint8_t *)pBuffer;
-        uint32_t remaining = (uint32_t)Size;
+        uint32_t remaining = requestSize;
         while (remaining > 0U) {
             const uint32_t span = EEPROM_ContiguousSpan(Address);
             uint32_t chunk = span;
@@ -272,8 +298,7 @@ void EEPROM_ReadBuffer(uint32_t Address, void *pBuffer, uint8_t Size) {
 bool EEPROM_Probe(uint32_t Address)
 {
 #if defined(ARDUINO_ARCH_ESP32) && !defined(ENABLE_OPENCV)
-    const uint32_t kDirectEepromLimit = 0x2000U;
-    if (Address >= kDirectEepromLimit && EEPROM_SharedLogicalSize() > 0U) {
+    if (Address >= EEPROM_DIRECT_EEPROM_LIMIT && EEPROM_SharedLogicalSize() > 0U) {
         return Address < EEPROM_SharedLogicalSize();
     }
 #endif
@@ -301,15 +326,29 @@ bool EEPROM_Probe(uint32_t Address)
 
 void EEPROM_WriteBuffer(uint32_t Address, const void *pBuffer, uint8_t WRITE_SIZE) {
 
+    if (WRITE_SIZE == 0U || pBuffer == nullptr) {
+        return;
+    }
+
 #if defined(ARDUINO_ARCH_ESP32) && !defined(ENABLE_OPENCV)
-    // User requirement: keep the first 8KB (0x0000..0x1FFF) on the real EEPROM.
-    const uint32_t kDirectEepromLimit = 0x2000U;
-    const bool directEepromWindow = (Address < kDirectEepromLimit) &&
-                                    ((uint32_t)WRITE_SIZE <= (kDirectEepromLimit - Address));
+    const uint32_t requestSize = (uint32_t)WRITE_SIZE;
+    const bool directEepromWindow = EEPROM_IsDirectEepromRange(Address, requestSize);
+
+    // Split cross-boundary accesses so [0x0000..0x1FFF] always stays on real EEPROM.
+    if (!directEepromWindow &&
+        Address < EEPROM_DIRECT_EEPROM_LIMIT &&
+        EEPROM_SharedLogicalSize() > 0U) {
+        const uint8_t firstChunk = (uint8_t)(EEPROM_DIRECT_EEPROM_LIMIT - Address);
+        EEPROM_WriteBuffer(Address, pBuffer, firstChunk);
+        EEPROM_WriteBuffer(EEPROM_DIRECT_EEPROM_LIMIT,
+                           (const uint8_t *)pBuffer + firstChunk,
+                           (uint8_t)(WRITE_SIZE - firstChunk));
+        return;
+    }
 
     if (!directEepromWindow && EEPROM_SharedLogicalSize() > 0U) {
         const uint8_t *src = (const uint8_t *)pBuffer;
-        uint32_t remaining = (uint32_t)WRITE_SIZE;
+        uint32_t remaining = requestSize;
         uint8_t buffer[128];
 
         while (remaining > 0U) {
@@ -346,7 +385,7 @@ void EEPROM_WriteBuffer(uint32_t Address, const void *pBuffer, uint8_t WRITE_SIZ
 #endif
 
 
-    uint8_t buffer[128];
+    uint8_t buffer[256];
     EEPROM_ReadBuffer(Address, buffer, WRITE_SIZE);
     if (memcmp(pBuffer, buffer, WRITE_SIZE) != 0) {
         const uint8_t IIC_ADD = EEPROM_ControlByteWrite(Address);
@@ -361,16 +400,21 @@ void EEPROM_WriteBuffer(uint32_t Address, const void *pBuffer, uint8_t WRITE_SIZ
             I2C_WriteBuffer(pBuffer, WRITE_SIZE) < 0) {
             I2C_Stop();
             interrupts();
-            delay(1);
+            if (EEPROM_POST_WRITE_DELAY_MS > 0U) {
+                delay(EEPROM_POST_WRITE_DELAY_MS);
+            }
             return;
         }
         I2C_Stop();
 
         // 写周期 ACK 轮询（比固定 delay 更可靠）
-        (void)EEPROM_WaitReady(IIC_ADD, 20);
+        (void)EEPROM_WaitReady(IIC_ADD, EEPROM_WRITE_READY_TIMEOUT_MS);
 
         interrupts();
     }
     // 兜底延时，避免某些器件/布线在连续访问时不稳
+    if (EEPROM_POST_WRITE_DELAY_MS > 0U) {
+        delay(EEPROM_POST_WRITE_DELAY_MS);
+    }
 
 }

@@ -60318,7 +60318,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "120u"
+		(property "Value" "120n"
 			(at 143.383 310.134 90)
 			(effects
 				(font
