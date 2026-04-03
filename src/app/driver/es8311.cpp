@@ -6,6 +6,7 @@
 #include <driver/i2s.h>
 #include <esp_err.h>
 #include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 #include <freertos/task.h>
 #include <limits.h>
 #include <math.h>
@@ -29,9 +30,9 @@ constexpr int kPinMclk = 35;
 constexpr int kPinAudioSwitch = 41;
 
 constexpr i2s_port_t kI2sPort = I2S_NUM_0;
-constexpr int kSampleRate = 16000;
+constexpr int kSampleRate = 8000;
 constexpr i2s_bits_per_sample_t kBitsPerSample = I2S_BITS_PER_SAMPLE_16BIT;
-constexpr size_t kFrameSamples = 160;
+constexpr size_t kFrameSamples = 80;
 constexpr size_t kFrameBytes = kFrameSamples * sizeof(int16_t);
 const TickType_t kI2sWaitTicks = pdMS_TO_TICKS(20);
 
@@ -105,6 +106,15 @@ static bool s_i2s_driver_installed = false;
 static TaskHandle_t s_passthrough_task = nullptr;
 static volatile bool s_passthrough_running = false;
 static ES8311_AudioMode_t s_audio_mode = ES8311_AUDIO_MODE_RECEIVE;
+static ES8311_FrameHook_t s_frame_hook = nullptr;
+static void *s_frame_hook_user_data = nullptr;
+
+constexpr size_t kOutputQueueSamples = kFrameSamples * 64u;
+static int16_t s_output_queue[kOutputQueueSamples];
+static size_t s_output_queue_head = 0;
+static size_t s_output_queue_tail = 0;
+static size_t s_output_queue_count = 0;
+static SemaphoreHandle_t s_output_queue_mutex = nullptr;
 
 #if ENABLE_ES8311_TX_DTMF_TEST
 struct DtmfGeneratorState {
@@ -516,6 +526,88 @@ static bool i2s_write_frame(const int16_t *src) {
     return true;
 }
 
+static void output_queue_init(void) {
+    if (s_output_queue_mutex == nullptr) {
+        s_output_queue_mutex = xSemaphoreCreateMutex();
+    }
+}
+
+static void output_queue_clear_locked(void) {
+    s_output_queue_head = 0;
+    s_output_queue_tail = 0;
+    s_output_queue_count = 0;
+}
+
+static size_t output_queue_push(const int16_t *samples, size_t sample_count) {
+    if (samples == nullptr || sample_count == 0) {
+        return 0;
+    }
+
+    output_queue_init();
+    if (s_output_queue_mutex == nullptr) {
+        return 0;
+    }
+
+    if (xSemaphoreTake(s_output_queue_mutex, pdMS_TO_TICKS(5)) != pdTRUE) {
+        return 0;
+    }
+
+    size_t written = 0;
+    while (written < sample_count && s_output_queue_count < kOutputQueueSamples) {
+        s_output_queue[s_output_queue_tail] = samples[written++];
+        s_output_queue_tail = (s_output_queue_tail + 1u) % kOutputQueueSamples;
+        ++s_output_queue_count;
+    }
+
+    xSemaphoreGive(s_output_queue_mutex);
+    return written;
+}
+
+static size_t output_queue_pop_frame(int16_t *dst, const size_t sample_count) {
+    if (dst == nullptr || sample_count == 0) {
+        return 0;
+    }
+
+    output_queue_init();
+    if (s_output_queue_mutex == nullptr) {
+        memset(dst, 0, sample_count * sizeof(int16_t));
+        return 0;
+    }
+
+    if (xSemaphoreTake(s_output_queue_mutex, pdMS_TO_TICKS(5)) != pdTRUE) {
+        memset(dst, 0, sample_count * sizeof(int16_t));
+        return 0;
+    }
+
+    size_t read = 0;
+    while (read < sample_count && s_output_queue_count > 0) {
+        dst[read++] = s_output_queue[s_output_queue_head];
+        s_output_queue_head = (s_output_queue_head + 1u) % kOutputQueueSamples;
+        --s_output_queue_count;
+    }
+
+    xSemaphoreGive(s_output_queue_mutex);
+
+    if (read < sample_count) {
+        memset(dst + read, 0, (sample_count - read) * sizeof(int16_t));
+    }
+
+    return read;
+}
+
+static void output_queue_clear(void) {
+    output_queue_init();
+    if (s_output_queue_mutex == nullptr) {
+        return;
+    }
+
+    if (xSemaphoreTake(s_output_queue_mutex, pdMS_TO_TICKS(5)) != pdTRUE) {
+        return;
+    }
+    output_queue_clear_locked();
+    xSemaphoreGive(s_output_queue_mutex);
+}
+
 static void es8311_passthrough_task(void *) {
     static int16_t frame[kFrameSamples];
 #if ENABLE_ES8311_TX_DTMF_TEST
@@ -535,7 +627,9 @@ static void es8311_passthrough_task(void *) {
         }
 
         if (mode == ES8311_AUDIO_MODE_TRANSMIT) {
-            dtmf_fill_frame(&dtmf, frame, kFrameSamples);
+            if (output_queue_pop_frame(frame, kFrameSamples) == 0) {
+                dtmf_fill_frame(&dtmf, frame, kFrameSamples);
+            }
             if (!i2s_write_frame(frame)) {
                 vTaskDelay(pdMS_TO_TICKS(2));
             }
@@ -543,9 +637,21 @@ static void es8311_passthrough_task(void *) {
         }
 #endif
 
+        if (mode == ES8311_AUDIO_MODE_TRANSMIT) {
+            output_queue_pop_frame(frame, kFrameSamples);
+            if (!i2s_write_frame(frame)) {
+                vTaskDelay(pdMS_TO_TICKS(2));
+            }
+            continue;
+        }
+
         if (!i2s_read_frame(frame)) {
             vTaskDelay(pdMS_TO_TICKS(2));
             continue;
+        }
+
+        if (s_frame_hook != nullptr) {
+            s_frame_hook(frame, kFrameSamples, mode, s_frame_hook_user_data);
         }
 
         if (!i2s_write_frame(frame)) {
@@ -649,6 +755,31 @@ bool ES8311_SetReceiveMode(void) {
 
 bool ES8311_SetTransmitMode(void) {
     return ES8311_SetAudioMode(ES8311_AUDIO_MODE_TRANSMIT);
+}
+
+void ES8311_SetFrameHook(ES8311_FrameHook_t hook, void *user_data) {
+    s_frame_hook = hook;
+    s_frame_hook_user_data = user_data;
+}
+
+size_t ES8311_QueueOutputSamples(const int16_t *samples, size_t sample_count) {
+    if (!ES8311_Init()) {
+        return 0;
+    }
+
+    return output_queue_push(samples, sample_count);
+}
+
+void ES8311_ClearOutputQueue(void) {
+    output_queue_clear();
+}
+
+int ES8311_GetSampleRate(void) {
+    return kSampleRate;
+}
+
+size_t ES8311_GetFrameSamples(void) {
+    return kFrameSamples;
 }
 
 bool ES8311_PlayTestTone(const uint32_t durationMs) {

@@ -7,6 +7,7 @@
 #include <cstdlib>
 #endif
 #include "../lib/shared_flash.h"
+#include "../lib/nrl_audio_bridge.h"
 #include "app/si.h"
 #include "scheduler.h"
 #include "driver/system.h"
@@ -672,6 +673,9 @@ void setup() {
 #endif
   if (!ES8311_SetReceiveMode()) {
       Serial.println("ES8311 set receive mode failed.");
+  }
+  if (!NRLAudioBridge_Init()) {
+      Serial.println("NRL audio bridge init failed.");
   }
   SCHEDULER_Init();
 

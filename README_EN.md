@@ -10,11 +10,59 @@ This project uses ESP32-S3 as the main controller for the Quansheng UV-K5 radio,
 
 ### ✨ Key Features
 
-- **🌐 Network Audio Forwarding**: Remote audio transmission and reception via WiFi
+- **🌐 NRL Network Audio Bridge**: WiFi-based NRL UDP voice bridging using G.711 A-law
 - **🕐 RTC Real-Time Clock**: Precise time management and scheduling functions
 - **📶 WiFi OTA Updates**: Wireless firmware upgrades without disassembly
 - **🎛️ Complete Radio Functions**: Retains all core features of the original UV-K5
 - **🔧 Extensibility**: Based on Arduino framework, easy for secondary development
+
+## 🌐 NRL Network Audio Bridge
+
+The firmware now includes an NRL network audio bridge for bidirectional voice forwarding between RF and the network.
+
+### What It Does
+
+- Connects to an NRL server over WiFi using either an IPv4 address or a hostname
+- Uses `UDP` as the transport
+- Uses `G.711 A-law` for network voice encoding
+- Uses `8kHz / 16-bit / Mono` as the local audio format
+- Sends fixed `160-byte` G.711 A-law voice payloads
+- Accepts adaptive incoming voice payloads from `160` to `500` bytes
+- Plays incoming network audio on the speaker while keying RF transmit
+- Plays received RF audio locally while forwarding it to NRL
+- Shows the remote `CALLSIGN-SSID` on the main screen during network voice activity
+
+### NRL Packet Mapping
+
+- Header magic: `NRL2`
+- Header length: `48` bytes
+- Voice packet type: `1`
+- Heartbeat packet type: `2`
+- Server voice packet type accepted on RX: `9`
+- Default heartbeat interval: `2000ms`
+- `CPUID` is currently fixed to `0`
+- The packet counter increments for each outgoing packet
+
+### Configuration
+
+NRL-related configuration lives in [src/lib/nrl_audio_config.h](/home/caocheng/ham/UVE5/src/lib/nrl_audio_config.h):
+
+- `NRL_AUDIO_WIFI_SSID`: WiFi SSID
+- `NRL_AUDIO_WIFI_PASSWORD`: WiFi password
+- `NRL_AUDIO_SERVER_HOST`: NRL server address, accepts IP or hostname
+- `NRL_AUDIO_SERVER_PORT`: remote server port
+- `NRL_AUDIO_LOCAL_PORT`: local UDP bind port, use `0` for an ephemeral port
+- `NRL_AUDIO_CALLSIGN`: local callsign
+- `NRL_AUDIO_CALLSIGN_SSID`: local SSID
+- `NRL_AUDIO_DEVICE_MODE`: NRL device mode field
+- `NRL_AUDIO_HEARTBEAT_INTERVAL_MS`: heartbeat period
+- `NRL_AUDIO_RX_PACKET_TIMEOUT_MS`: incoming voice timeout
+
+### Notes
+
+- NRL parameters are currently compile-time macros and are not yet exposed in the menu or EEPROM
+- The final behavior of “speaker playback while transmitting RF” still depends on the board-level audio routing
+- The network audio feature mentioned in this repository currently refers to this NRL UDP audio bridge implementation
 
 ## 🛠️ Hardware Platform
 
@@ -155,6 +203,9 @@ UVE5/
 │       └── main.cpp       # Bootloader main program
 ├── lib/                    # Library files
 │   └── shared_flash.h     # Shared flash partition definitions
+├── src/lib/                # App-side extra modules
+│   ├── nrl_audio_bridge.cpp/h  # NRL UDP audio bridge
+│   └── nrl_audio_config.h      # NRL audio configuration
 └── scripts/                # Utility scripts
     ├── upload_app0.py     # Upload script
     └── serial_monitor.py  # Serial monitor
