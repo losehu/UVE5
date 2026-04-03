@@ -36,6 +36,7 @@
 #include "../misc.h"
 #include "../radio.h"
 #include "../settings.h"
+#include "nrl_audio_bridge.h"
 #include "helper.h"
 #include "inputbox.h"
 #include "main.h"
@@ -874,9 +875,14 @@ void UI_DisplayMain(void) {
     if (center_line == CENTER_LINE_NONE) {    // we're free to use the middle line
 
         const bool rx = FUNCTION_IsRx();
+        char net_identity[18];
 #ifdef ENABLE_MDC1200
 
-        if (mdc1200_rx_ready_tick_500ms > 0) {
+        if (NRLAudioBridge_GetRemoteIdentity(net_identity, sizeof(net_identity))) {
+            center_line = CENTER_LINE_NETWORK_ID;
+            snprintf(String, sizeof(String), "%s", net_identity);
+            UI_PrintStringSmall(String, 2, 0, 3);
+        } else if (mdc1200_rx_ready_tick_500ms > 0) {
             char mdc1200_contact[14];
             center_line = CENTER_LINE_MDC1200;
             uint8_t print_col = 0;
@@ -900,6 +906,12 @@ void UI_DisplayMain(void) {
             UI_PrintStringSmall(String, print_col, 0, 3);
 
 
+        } else
+#else
+        if (NRLAudioBridge_GetRemoteIdentity(net_identity, sizeof(net_identity))) {
+            center_line = CENTER_LINE_NETWORK_ID;
+            snprintf(String, sizeof(String), "%s", net_identity);
+            UI_PrintStringSmall(String, 2, 0, 3);
         } else
 #endif
 

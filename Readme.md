@@ -37,11 +37,59 @@ make -C src/app/opencv clean
 
 ### ✨ 主要特性
 
-- **🌐 网络音频转发**: 通过 WiFi 实现远程音频传输和接收
+- **🌐 NRL 网络音频桥接**: 通过 WiFi 使用 NRL UDP 报文收发 G.711 A-law 语音
 - **🕐 RTC 实时时钟**: 精确的时间管理和定时功能
 - **📶 WiFi OTA 更新**: 无线固件升级,无需拆机
 - **🎛️ 完整的无线电功能**: 保留原版 UV-K5 的所有核心功能
 - **🔧 可扩展性**: 基于 Arduino 框架,易于二次开发
+
+## 🌐 NRL 网络音频桥接
+
+当前固件已经内置 NRL 网络音频桥接,用于在射频和网络之间双向转发语音。
+
+### 功能说明
+
+- 通过 WiFi 连接 NRL 服务器,支持直接填写 IPv4 地址或域名
+- 网络协议为 `UDP`
+- 语音编码为 `G.711 A-law`
+- 本地音频格式统一为 `8kHz / 16-bit / Mono`
+- 发往网络的语音负载固定为 `160` 字节 G.711 A-law
+- 接收网络语音时支持 `160` 到 `500` 字节自适应负载
+- 网络来音会在喇叭播放,同时通过射频发射
+- 射频收到的音频会在本地喇叭播放,同时发送到 NRL
+- 主界面中间行会显示网络对端的 `呼号-SSID`
+
+### NRL 报文实现
+
+- 报文头标识: `NRL2`
+- 头长度: `48` 字节
+- 语音包类型: `1`
+- 心跳包类型: `2`
+- 接收端兼容服务器语音类型: `9`
+- 心跳间隔默认: `2000ms`
+- `CPUID` 字段当前固定为 `0`
+- 发包序号字段会随报文递增
+
+### 配置方法
+
+NRL 相关参数位于 [src/lib/nrl_audio_config.h](/home/caocheng/ham/UVE5/src/lib/nrl_audio_config.h):
+
+- `NRL_AUDIO_WIFI_SSID`: WiFi 名称
+- `NRL_AUDIO_WIFI_PASSWORD`: WiFi 密码
+- `NRL_AUDIO_SERVER_HOST`: NRL 服务器地址,支持 IP 或域名
+- `NRL_AUDIO_SERVER_PORT`: 服务器端口
+- `NRL_AUDIO_LOCAL_PORT`: 本地 UDP 监听端口,设为 `0` 时可使用系统分配端口
+- `NRL_AUDIO_CALLSIGN`: 本机呼号
+- `NRL_AUDIO_CALLSIGN_SSID`: 本机 SSID
+- `NRL_AUDIO_DEVICE_MODE`: NRL 设备模式字段
+- `NRL_AUDIO_HEARTBEAT_INTERVAL_MS`: 心跳周期
+- `NRL_AUDIO_RX_PACKET_TIMEOUT_MS`: 网络来音超时判定
+
+### 注意事项
+
+- 当前 NRL 参数仍为编译期宏配置,尚未接入菜单和 EEPROM
+- 网络来音时“喇叭播放并同时射频发射”的最终效果仍取决于板级音频硬件连接
+- README 中提到的网络音频功能,当前具体实现即为本 NRL UDP 音频桥接
 
 ## 🛠️ 硬件平台
 
@@ -182,6 +230,9 @@ UVE5/
 │       └── main.cpp       # Bootloader 主程序
 ├── lib/                    # 库文件
 │   └── shared_flash.h     # 共享 Flash 分区定义
+├── src/lib/                # 应用侧附加模块
+│   ├── nrl_audio_bridge.cpp/h  # NRL UDP 音频桥接
+│   └── nrl_audio_config.h      # NRL 音频配置
 └── scripts/                # 辅助脚本
     ├── upload_app0.py     # 上传脚本
     └── serial_monitor.py  # 串口监视器
